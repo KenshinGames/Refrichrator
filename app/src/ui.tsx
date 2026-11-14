@@ -32,6 +32,7 @@ let depth = 0;
 const notify = () => routeListeners.forEach((l) => l());
 window.addEventListener('popstate', (e) => {
   depth = (e.state as { depth?: number } | null)?.depth ?? 0;
+  closeToast();
   notify();
 });
 
@@ -40,6 +41,7 @@ export function go(path: string, replace = false): void {
   const url = '#' + path;
   if (replace) history.replaceState({ depth }, '', url);
   else history.pushState({ depth: ++depth }, '', url);
+  closeToast(); // 前の画面のお知らせを、次の画面に持ちこさない
   notify();
 }
 export function back(fallback = '/'): void {
@@ -87,6 +89,7 @@ const PATHS: Record<string, ReactNode> = {
       <path d="M5.800 11.500a6.200 6.200 0 0 0 12.400 0M12 17.700V21" />
     </>
   ),
+  pen: <path d="M4.5 19.5l1-4L16.3 4.7a1.6 1.6 0 0 1 2.3 0l.7.7a1.6 1.6 0 0 1 0 2.3L8.5 18.5zM14.5 6.5l3 3" />,
   star: <path d="M12 3.600l2.500 5.200 5.700.800-4.100 4 1 5.700-5.100-2.700-5.100 2.700 1-5.700-4.100-4 5.700-.800z" />,
   gear: (
     <>
@@ -147,7 +150,7 @@ export function Ring({ item, size = 44 }: { item: Item; size?: number }) {
   const c = 2 * Math.PI * 19;
   return (
     <span className={`ring ring-${leftTone(left)}`} style={{ width: size, height: size }} aria-hidden="true">
-      <svg viewBox="0 0 44 44" fill="none" strokeWidth="3">
+      <svg viewBox="0 0 44 44" fill="none" strokeWidth="2.25">
         <circle className="ring-track" cx="22" cy="22" r="19" />
         <circle className="ring-arc" cx="22" cy="22" r="19" strokeDasharray={`${c * ratio} ${c}`} transform="rotate(-90 22 22)" />
       </svg>
@@ -178,6 +181,7 @@ export function useVisualViewport(): void {
 }
 
 export function Sheet({ title, onClose, children, footer }: { title: string; onClose: () => void; children: ReactNode; footer?: ReactNode }) {
+  useEffect(() => closeToast(), []);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
     window.addEventListener('keydown', onKey);

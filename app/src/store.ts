@@ -296,13 +296,14 @@ function settled(): Promise<unknown> {
   return queue;
 }
 
-export function addItems(rows: NewItem[]): void {
-  if (!rows.length) return;
+export function addItems(rows: NewItem[]): string[] {
+  if (!rows.length) return [];
   const day = today();
   const withIds = rows.map((r) => ({ ...r, id: crypto.randomUUID() }));
   const fresh: Item[] = withIds.map((r) => ({ id: r.id, name: r.name, category: r.category, addedOn: day, expiresOn: addDays(day, r.days) }));
   set({ items: sortItems([...state.items, ...fresh]) });
   void mutate(() => api('add', { items: withIds }));
+  return withIds.map((r) => r.id);
 }
 export function setDays(id: string, days: number): void {
   const d = Math.max(0, Math.min(365, days));

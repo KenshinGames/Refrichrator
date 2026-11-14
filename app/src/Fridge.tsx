@@ -30,6 +30,17 @@ async function toJpeg(file: File): Promise<{ data: string; mime: string; preview
   return { data: url.slice(url.indexOf(',') + 1), mime: 'image/jpeg', preview: url };
 }
 
+/** 同じ名前・同じ期限の食材を1つにまとめる(見た目だけ。中身は別々のまま) */
+export function stack(items: Item[]): { item: Item; count: number }[] {
+  const out: { item: Item; count: number }[] = [];
+  for (const item of items) {
+    const hit = out.find((o) => normName(o.item.name) === normName(item.name) && o.item.expiresOn === item.expiresOn);
+    if (hit) hit.count++;
+    else out.push({ item, count: 1 });
+  }
+  return out;
+}
+
 export function Fridge() {
   const items = useStore((s) => s.items);
   const [mode, setMode] = useState<AddMode | null>(null);
@@ -72,15 +83,15 @@ export function Fridge() {
       <div className="add-panel" aria-label="食材を足す">
         <button onClick={() => receiptInput.current?.click()}>
           <Icon name="receipt" />
-          レシート
+          レシートを撮る
         </button>
         <button onClick={() => photoInput.current?.click()}>
           <Icon name="camera" />
-          写真
+          食材を撮る
         </button>
         <button onClick={() => setMode('text')}>
-          <Icon name="mic" />
-          話す・打つ
+          <Icon name="pen" />
+          書く・話す
         </button>
         <button onClick={() => setMode('picks')}>
           <Icon name="star" />
@@ -100,12 +111,15 @@ export function Fridge() {
           <section key={g.title} className="group">
             <h2>{g.title}</h2>
             <ul className="rows">
-              {g.list.map((i) => (
+              {stack(g.list).map(({ item: i, count }) => (
                 <li key={i.id}>
                   <button className="row" onClick={() => setEditing(i.id)}>
                     <Ring item={i} />
                     <span className="row-main">
-                      <span className="row-name">{i.name}</span>
+                      <span className="row-name">
+                        {i.name}
+                        {count > 1 && <span className="times">×{count}</span>}
+                      </span>
                       <span className={`left left-${leftTone(daysLeft(i))}`}>{leftLabel(daysLeft(i))}</span>
                     </span>
                     <Icon name="right" size={18} />
@@ -135,7 +149,7 @@ export function Fridge() {
 
 // ───────── 足す ─────────
 
-const TITLES: Record<AddMode, string> = { text: '話す・打つ', picks: 'いつもの', receipt: 'レシートから', photo: '写真から' };
+const TITLES: Record<AddMode, string> = { text: '書く・話す', picks: 'いつもの', receipt: 'レシートから', photo: '写真から' };
 
 function AddSheet({ mode, shot, onClose, onRetake }: { mode: AddMode; shot: { file: File; kind: 'receipt' | 'photo' } | null; onClose: () => void; onRetake: () => void }) {
   const staples = useStore((s) => s.staples);
@@ -147,7 +161,8 @@ function AddSheet({ mode, shot, onClose, onRetake }: { mode: AddMode; shot: { fi
   const [found, setFound] = useState<NewItem[]>([]);
   const [preview, setPreview] = useState<string | null>(null);
   const [error, setError] = useState('');
-  const [added, setAdded] = useState<string[]>([]);
+  const [added, setAdded] = useState<Record<string, string>>({}); // 押して入れたもの(名前 → 食材の ID)
+  const [openRow, setOpenRow] = useState<number | null>(null);
   const run = useRef(0);
 
   // 写真が渡されたら、すぐ読み取りを始める
@@ -211,24 +226,39 @@ function AddSheet({ mode, shot, onClose, onRetake }: { mode: AddMode; shot: { fi
 
   if (mode === 'picks') {
     const picks = quickPicks(staples);
+    const count = Object.keys(added).length;
     return (
-      <Sheet title="いつもの" onClose={onClose} footer={<button className="btn" onClick={onClose}>{added.length ? `${added.length}品を入れました。閉じる` : '閉じる'}</button>}>
-        <p className="hint">押すとすぐ冷蔵庫に入ります。よく買うものが、だんだんここに並びます。</p>
+      <Sheet
+        title="いつもの"
+        onClose={onClose}
+        footer={
+          <button className="btn" onClick={onClose}>
+            完了
+          </button>
+        }
+      >
+        <p className="hint">{count ? `${count}品を入れました。もう一度押すと取り消せます。` : '押すとすぐ冷蔵庫に入ります。よく買うものが、だんだんここに並びます。'}</p>
         <div className="picks">
           {picks.map((p) => {
-            const n = added.filter((a) => a === p.name).length;
+            const id = added[p.name];
             return (
               <button
                 key={p.name}
-                className={`pick ${n ? 'pick-on' : ''}`}
+                className={`pick ${id ? 'pick-on' : ''}`}
+                aria-pressed={!!id}
                 onClick={() => {
-                  addItems([p]);
-                  setAdded((a) => [...a, p.name]);
+                  if (id) {
+                    // 押しまちがい:もう一度押すと取り消す
+                    removeItems([id]);
+                    setAdded(({ [p.name]: _gone, ...rest }) => rest);
+                  } else {
+                    const [newId] = addItems([p]);
+                    setAdded((a) => ({ ...a, [p.name]: newId }));
+                  }
                 }}
               >
-                {n > 0 && <Icon name="check" size={16} />}
+                {id && <Icon name="check" size={16} />}
                 {p.name}
-                {n > 1 && <span className="pick-n">×{n}</span>}
               </button>
             );
           })}
@@ -326,14 +356,14 @@ function AddSheet({ mode, shot, onClose, onRetake }: { mode: AddMode; shot: { fi
     >
       {held.length > 0 && (
         <p className="held">
-          もう冷蔵庫にある{held.length}品({held.map((h) => h.name).join('・')})は外しました。
+          冷蔵庫にもうある{held.length}品({held.map((h) => h.name).join('・')})は入れていません。
           <button
             onClick={() => {
               setFound((l) => [...l, ...held]);
               setHeld([]);
             }}
           >
-            それも入れる
+            この{held.length}品も入れる
           </button>
         </p>
       )}
@@ -341,26 +371,33 @@ function AddSheet({ mode, shot, onClose, onRetake }: { mode: AddMode; shot: { fi
         <p className="problem">食材を読み取れませんでした。{mode === 'text' ? '食材の名前を入れてみてください。' : '明るいところで、全体が入るように撮ってみてください。'}</p>
       ) : (
         <>
-          <p className="hint">ちがうものは × で外せます。</p>
+          <p className="hint">数字は日持ちの目安です(押すと直せます)。ちがうものは × で外せます。</p>
           <ul className="rows">
             {found.map((f, idx) => (
-              <li key={`${f.name}-${idx}`} className="row row-edit">
+              <li key={`${f.name}-${idx}`} className={`row row-edit ${openRow === idx ? 'open' : ''}`}>
                 <span className="row-name">
                   {f.name}
-                  {have.has(normName(f.name)) && <small className="dup">もうあります</small>}
+                  {have.has(normName(f.name)) && <small className="dup">冷蔵庫にもあります</small>}
                 </span>
                 <span className="mini-step">
-                  <button aria-label={`${f.name}の日数を減らす`} disabled={f.days <= 1} onClick={() => setFound((l) => l.map((x, i) => (i === idx ? { ...x, days: Math.max(1, x.days - 1) } : x)))}>
+                  <button className="mini-btn" aria-label={`${f.name}の日数を減らす`} disabled={f.days <= 1} onClick={() => setFound((l) => l.map((x, i) => (i === idx ? { ...x, days: Math.max(1, x.days - 1) } : x)))}>
                     <Icon name="minus" size={16} />
                   </button>
-                  <span className="mini-value">
+                  <button className="mini-value" aria-label={`${f.name}の日数を直す`} aria-expanded={openRow === idx} onClick={() => setOpenRow(openRow === idx ? null : idx)}>
                     <b>{f.days}</b>日
-                  </span>
-                  <button aria-label={`${f.name}の日数を増やす`} onClick={() => setFound((l) => l.map((x, i) => (i === idx ? { ...x, days: Math.min(365, x.days + 1) } : x)))}>
+                  </button>
+                  <button className="mini-btn" aria-label={`${f.name}の日数を増やす`} onClick={() => setFound((l) => l.map((x, i) => (i === idx ? { ...x, days: Math.min(365, x.days + 1) } : x)))}>
                     <Icon name="plus" size={16} />
                   </button>
                 </span>
-                <button className="row-x" aria-label={`${f.name}を外す`} onClick={() => setFound((l) => l.filter((_, i) => i !== idx))}>
+                <button
+                  className="row-x"
+                  aria-label={`${f.name}を外す`}
+                  onClick={() => {
+                    setOpenRow(null);
+                    setFound((l) => l.filter((_, i) => i !== idx));
+                  }}
+                >
                   <Icon name="close" size={18} />
                 </button>
               </li>
@@ -395,7 +432,7 @@ function AddOne({ onAdd }: { onAdd: (name: string) => void }) {
         submit();
       }}
     >
-      <input className="field" value={name} onChange={(e) => setName(e.target.value)} placeholder="もれたものを足す" aria-label="もれたものを足す" enterKeyHint="done" />
+      <input className="field" value={name} onChange={(e) => setName(e.target.value)} placeholder="ほかの食材を足す" aria-label="ほかの食材を足す" enterKeyHint="done" />
       <button type="submit" className="round" aria-label="足す" disabled={!name.trim()}>
         <Icon name="plus" size={20} />
       </button>
@@ -408,8 +445,8 @@ function AddOne({ onAdd }: { onAdd: (name: string) => void }) {
 function ItemSheet({ item, onClose }: { item: Item; onClose: () => void }) {
   const days = Math.max(0, daysLeft(item));
   const quick: [string, number][] = [
-    ['今日まで', 0],
-    ['あと3日', 3],
+    ['今日', 0],
+    ['3日', 3],
     ['1週間', 7],
     ['2週間', 14],
   ];
@@ -426,7 +463,7 @@ function ItemSheet({ item, onClose }: { item: Item; onClose: () => void }) {
             onClose();
           }}
         >
-          もうない(使い切った・捨てた)
+          冷蔵庫から出す
         </button>
       }
     >

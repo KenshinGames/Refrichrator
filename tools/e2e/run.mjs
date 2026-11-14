@@ -61,14 +61,15 @@ for (const size of sizes) {
   await h.tap('卵', { exact: true });
   await h.tap('牛乳', { exact: true });
   await check('06-picks-added');
-  await h.tap('2品を入れました。閉じる');
+  await h.waitText('2品を入れました');
+  await h.tap('完了', { exact: true });
   const t1 = Date.now();
   await h.waitText('牛乳');
   expect(Date.now() - t1 < 150, 'いつものを押してから一覧に出るまでが遅い');
   await check('07-fridge-two');
 
   // ── 話す・打つ:知っている食材名だけなら、AI を待たずに出る ──
-  await h.tap('話す・打つ');
+  await h.tap('書く・話す');
   await h.page.waitForSelector('.sheet textarea');
   await check('08-text-input');
   await h.page.type('.sheet textarea', '納豆、もやし');
@@ -80,7 +81,7 @@ for (const size of sizes) {
   await h.waitGone('.sheet');
 
   // ── 話す・打つ:文章は AI が読む。待つ間も画面は出ている ──
-  await h.tap('話す・打つ');
+  await h.tap('書く・話す');
   await h.page.waitForSelector('.sheet textarea');
   await h.page.type('.sheet textarea', '今日は豚こまと小松菜と絹豆腐を買った');
   await h.tap('読み取る');
@@ -89,6 +90,7 @@ for (const size of sizes) {
   await h.waitText('3品を見つけました');
   await check('10-text-confirm');
   // 日数を変える・1つ外す・もれたものを足す
+  await h.tap('小松菜の日数を直す');
   await h.tap('小松菜の日数を増やす');
   await h.tap('絹豆腐を外す');
   await h.page.type('.add-one input', 'しめじ');
@@ -116,23 +118,27 @@ for (const size of sizes) {
   await h.waitGone('.sheet');
   await sleep(900); // サーバーとの同期が終わるのを待つ
   await check('14-fridge-full');
-  const names = await h.page.$$eval('.row-name', (els) => els.map((e) => e.textContent));
+  // 同じ名前・同じ期限のものは「×2」のように1行にまとまって出る
+  const rowsNow = () => h.page.$$eval('.rows .row-name', (els) => els.map((e) => ({ name: e.firstChild.textContent, n: Number(e.querySelector('.times')?.textContent.slice(1) ?? 1) })));
+  const listed = await rowsNow();
+  const names = listed.map((r) => r.name);
   for (const n of ['卵', '牛乳', '納豆', 'もやし', '豚こま肉', '小松菜', 'しめじ', '絹豆腐']) expect(names.includes(n), `冷蔵庫に ${n} がない(${names.join(',')})`);
   const server = (await apiCall('sync')).items.map((i) => i.name);
-  expect(server.length === names.length, `サーバーの数(${server.length})と画面の数(${names.length})が合わない`);
+  const shown = listed.reduce((t, r) => t + r.n, 0);
+  expect(server.length === shown, `サーバーの数(${server.length})と画面の数(${shown})が合わない`);
 
   // ── 1つを直す・なくす ──
   await h.tap('もやし');
   await h.waitText('おいしく食べられる日数の目安です');
   await check('15-item-sheet');
-  await h.tap('今日まで');
+  await h.tap('今日', { exact: true });
   await h.tap('閉じる', { exact: true });
   await h.waitGone('.sheet');
   await h.waitText('今日まで');
-  const milk = () => h.page.$$eval('.row-name', (els) => els.filter((e) => e.textContent === '牛乳').length);
+  const milk = async () => (await rowsNow()).filter((r) => r.name === '牛乳').reduce((t, r) => t + r.n, 0);
   const before = await milk();
   await h.tap('牛乳');
-  await h.tap('もうない');
+  await h.tap('冷蔵庫から出す');
   await h.waitGone('.sheet');
   await sleep(300);
   expect((await milk()) === before - 1, '牛乳が1つ減っていない');
@@ -161,7 +167,7 @@ for (const size of sizes) {
   expect((await h.page.$eval('.outlink', (a) => a.href)).includes('google.com/search'), '似たレシピのリンクがない');
 
   // ── 作った! ──
-  await h.tap('作った!');
+  await h.tap('作った！');
   await h.waitText('使い切ったものを押してください');
   await check('24-cooked');
   const usedName = await h.page.$eval('.sheet .pick', (e) => e.textContent.trim());
@@ -196,7 +202,7 @@ for (const size of sizes) {
   // ── 設定 ──
   await h.tap('ホーム', { exact: true });
   await h.tap('設定');
-  await h.waitText('何人分で提案するか');
+  await h.waitText('何人分');
   await h.tap('人数を増やす');
   await h.page.type('input[aria-label="使わないもの"]', 'パクチー');
   await h.page.$eval('input[aria-label="使わないもの"]', (e) => e.blur());
@@ -207,13 +213,14 @@ for (const size of sizes) {
 
   // ── 開き直しても、合言葉なしですぐ使える(中身は手元に残っている)──
   await h.page.reload({ waitUntil: 'domcontentloaded' });
-  await h.waitText('何人分で提案するか', 3000);
+  await h.waitText('何人分', 3000);
   expect(!(await h.text()).includes('扉を開ける'), '開き直したら合言葉を聞かれた');
 
   // ── うまくいかないとき ──
   await apiTest({ fail: true, delay: 200 });
   await h.page.evaluate(() => { location.hash = '/s/bento'; window.dispatchEvent(new PopStateEvent('popstate')); });
   await h.waitText('提案を作れませんでした');
+  await sleep(1200); // 開き直したあとの扉の動きが終わるのを待つ
   await check('31-scene-error');
   await apiTest({ fail: false });
   await h.tap('もう一度ためす');

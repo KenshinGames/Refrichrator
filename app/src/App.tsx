@@ -1,7 +1,7 @@
 // 全体の組み立て:扉、ホーム、買い物、設定、下のタブ。
 import { useEffect, useState } from 'react';
 import { IdeaScreen, RecipeScreen, SCENE_INFO, SceneScreen } from './Cook.tsx';
-import { Fridge } from './Fridge.tsx';
+import { Fridge, stack } from './Fridge.tsx';
 import { batchFor, daysLeft, enter, leave, likelyScene, loadShopping, saveSettings, useStore } from './store.ts';
 import type { Scene } from './store.ts';
 import { back, go, Icon, ideaPath, leftLabel, leftTone, Ring, Stepper, Toast, useRoute, useVisualViewport } from './ui.tsx';
@@ -122,7 +122,7 @@ function SceneCard({ scene, big }: { scene: Scene; big: boolean }) {
     <button className={`scene ${big ? 'scene-big' : ''}`} onClick={() => go(`/s/${scene}`)}>
       <img src={photo ?? `./covers/${scene}.jpg`} alt="" decoding="async" />
       <span className="scene-name">{info.name}</span>
-      <span className="scene-note">{big && ready.length ? `${ready[0].title} ほか${ready.length - 1}品` : info.note}</span>
+      <span className="scene-note">{big && ready.length ? (photo ? `${ready.find((r) => r.imageUrl)!.title} ほか${ready.length - 1}品` : `${ready.length}品の提案ができています`) : info.note}</span>
     </button>
   );
 }
@@ -130,7 +130,7 @@ function SceneCard({ scene, big }: { scene: Scene; big: boolean }) {
 function Home() {
   const items = useStore((s) => s.items);
   const now = new Date();
-  const soon = items.filter((i) => daysLeft(i) <= 3).slice(0, 6);
+  const soon = stack(items.filter((i) => daysLeft(i) <= 3)).slice(0, 6);
   // いま開きそうな場面(平日はつかれた日、土日は休みの日)を大きく出す
   const first = likelyScene(now);
   const order = [first, ...SCENE_ORDER.filter((s) => s !== first)];
@@ -144,7 +144,17 @@ function Home() {
           <Icon name="gear" size={22} />
         </button>
       </header>
-      <h1 className="ask">{now.getHours() < 15 ? '今日、なに作る?' : '今夜、なに作る?'}</h1>
+      <h1 className="ask">{now.getHours() < 15 ? '今日、なに作る？' : '今夜、なに作る？'}</h1>
+
+      {items.length === 0 && (
+        <div className="empty">
+          <p className="empty-title">まず、家にあるものを入れましょう</p>
+          <p>冷蔵庫の中身に合わせて、今日の料理を提案します。</p>
+          <button className="btn" onClick={() => go('/fridge', true)}>
+            食材を入れる
+          </button>
+        </div>
+      )}
 
       <div className="scenes">
         {order.map((s, n) => (
@@ -152,16 +162,8 @@ function Home() {
         ))}
       </div>
 
-      <section className="soon">
-        {items.length === 0 ? (
-          <div className="empty">
-            <p className="empty-title">冷蔵庫は空です</p>
-            <p>家にあるものを入れると、それに合わせた料理を提案します。</p>
-            <button className="btn" onClick={() => go('/fridge', true)}>
-              食材を入れる
-            </button>
-          </div>
-        ) : (
+      {items.length > 0 && (
+        <section className="soon">
           <>
             <div className="sec-head">
               <h2>そろそろ使い切りたい</h2>
@@ -173,7 +175,7 @@ function Home() {
               <p className="quiet">急いで使うものはありません。</p>
             ) : (
               <ul className="soon-list">
-                {soon.map((i) => (
+                {soon.map(({ item: i }) => (
                   <li key={i.id}>
                     <button onClick={() => go('/fridge', true)} aria-label={`${i.name} ${leftLabel(daysLeft(i))}`}>
                       <Ring item={i} size={52} />
@@ -184,8 +186,8 @@ function Home() {
               </ul>
             )}
           </>
-        )}
-      </section>
+        </section>
+      )}
     </div>
   );
 }
@@ -260,7 +262,7 @@ function Shop() {
           <section className="group">
             <h2>家にあるもの</h2>
             <ul className="have">
-              {items.map((i) => (
+              {stack(items).map(({ item: i }) => (
                 <li key={i.id} className={`have-${leftTone(daysLeft(i))}`}>
                   {i.name}
                 </li>
@@ -291,7 +293,7 @@ function Settings() {
       </header>
 
       <section className="set">
-        <h2>何人分で提案するか</h2>
+        <h2>何人分</h2>
         <Stepper value={settings.servings} min={1} max={6} label="人数" unit="人分" onChange={(v) => saveSettings({ ...settings, servings: v })} />
       </section>
 

@@ -5,52 +5,56 @@
 */
 :root {
   color-scheme: light dark;
-  --bg: #f5f5f7;
+  --bg: #ffffff;
   --surface: #ffffff;
   --raised: #ffffff;
   --ink: #111113;
   --sub: #6b6b72;
   --faint: #a3a3ab;
   --hair: rgba(17, 17, 19, 0.09);
-  --fill: #ebebef;
-  --fill-press: #dfdfe5;
-  --primary: #111113;
+  --fill: #f2f2f4;
+  --fill-press: #e4e4e9;
+  --primary: #1d1d1f;
   --on-primary: #ffffff;
-  --glass: rgba(255, 255, 255, 0.78);
+  --glass: rgba(255, 255, 255, 0.92);
   --glass-line: rgba(255, 255, 255, 0.7);
   --scrim: rgba(10, 10, 12, 0.42);
-  --fresh: #3fae6a;
-  --warm: #e0962a;
-  --hot: #e2604a;
+  --fresh: #4aa874;
+  --warm: #d69a3a;
+  --hot: #d9644f;
   --fresh-tint: rgba(47, 182, 91, 0.13);
   --warm-tint: rgba(242, 145, 0, 0.14);
   --hot-tint: rgba(240, 68, 47, 0.11);
   --fresh-ink: #177a38;
   --warm-ink: #9a5a00;
   --hot-ink: #c22d1b;
-  --shadow: 0 1px 2px rgba(17, 17, 19, 0.04), 0 8px 24px -10px rgba(17, 17, 19, 0.14);
+  --shadow: 0 0 0 1px var(--hair);
   --lift: 0 2px 4px rgba(17, 17, 19, 0.05), 0 18px 36px -16px rgba(17, 17, 19, 0.32);
   --font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', 'Yu Gothic UI', 'Segoe UI', sans-serif;
   --round: ui-rounded, 'SF Pro Rounded', -apple-system, BlinkMacSystemFont, 'Hiragino Sans', sans-serif;
-  --pad: 20px;
+  --pad: 22px;
   --top: env(safe-area-inset-top, 0px);
   --bottom: env(safe-area-inset-bottom, 0px);
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 @media (prefers-color-scheme: dark) {
+  .toast {
+    background: rgba(58, 58, 62, 0.94);
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08);
+  }
   :root {
     --bg: #000000;
     --surface: #1c1c1e;
     --raised: #2a2a2d;
     --ink: #f5f5f7;
-    --sub: #9a9aa2;
+    --sub: #a8a8b0;
     --faint: #6a6a72;
     --hair: rgba(255, 255, 255, 0.11);
     --fill: #2a2a2d;
     --fill-press: #38383c;
     --primary: #f5f5f7;
     --on-primary: #111113;
-    --glass: rgba(34, 34, 37, 0.78);
+    --glass: rgba(34, 34, 37, 0.9);
     --glass-line: rgba(255, 255, 255, 0.1);
     --scrim: rgba(0, 0, 0, 0.6);
     --fresh-ink: #5fd787;
@@ -160,7 +164,7 @@ ol {
   transform: translateX(-50%);
   display: flex;
   padding: 5px;
-  border-radius: 999px;
+  border-radius: 24px;
   background: var(--glass);
   -webkit-backdrop-filter: saturate(180%) blur(22px);
   backdrop-filter: saturate(180%) blur(22px);
@@ -179,9 +183,9 @@ ol {
   justify-content: center;
   gap: 2px;
   padding: 6px 4px 5px;
-  border-radius: 999px;
+  border-radius: 19px;
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 500;
   color: var(--sub);
   text-align: center;
   transition:
@@ -193,6 +197,19 @@ ol {
   background: var(--fill);
 }
 
+/* タブの後ろに一覧が透けて、切れて見えないようにする */
+.stage-tabs::after {
+  content: '';
+  position: absolute;
+  z-index: 5;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: calc(var(--bottom) + 104px);
+  background: linear-gradient(to bottom, transparent, var(--bg) 58%);
+  pointer-events: none;
+}
+
 /* ───────── 共通の部品 ───────── */
 
 .btn {
@@ -201,17 +218,18 @@ ol {
   justify-content: center;
   gap: 8px;
   width: 100%;
-  min-height: 56px;
-  padding: 14px 20px;
-  border-radius: 18px;
+  min-height: 52px;
+  padding: 12px 20px;
+  border-radius: 14px;
   background: var(--primary);
   color: var(--on-primary);
-  font-size: 17px;
+  font-size: 16px;
   font-weight: 600;
   text-align: center;
   transition:
     transform 0.12s var(--ease),
     opacity 0.12s;
+  letter-spacing: 0.04em;
 }
 .btn:active {
   transform: scale(0.975);
@@ -246,7 +264,7 @@ ol {
   transform: scale(0.92);
 }
 .round:disabled {
-  opacity: 0.3;
+  opacity: 0.5;
 }
 .round-float {
   position: absolute;
@@ -264,7 +282,7 @@ ol {
   width: 100%;
   padding: 15px 16px;
   border: 0;
-  border-radius: 16px;
+  border-radius: 12px;
   background: var(--fill);
   color: var(--ink);
   font: inherit;
@@ -274,7 +292,7 @@ ol {
   appearance: none;
 }
 .field::placeholder {
-  color: var(--faint);
+  color: var(--sub);
 }
 .field:focus {
   outline: 2px solid var(--ink);
@@ -311,7 +329,7 @@ ol {
   align-items: center;
   gap: 4px;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 500;
   color: var(--sub);
   white-space: nowrap;
 }
@@ -345,9 +363,9 @@ ol {
 }
 .ring-num {
   position: relative;
-  font-family: var(--round);
+  font-family: var(--font);
   font-size: 15px;
-  font-weight: 600;
+  font-weight: 500;
   line-height: 1;
   color: var(--ink);
   font-variant-numeric: tabular-nums;
@@ -355,11 +373,11 @@ ol {
 .ring-num.ring-word {
   font-family: var(--font);
   font-size: 10.5px;
-  font-weight: 600;
+  font-weight: 500;
 }
 .left {
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 500;
   color: var(--sub);
 }
 .left-warm {
@@ -396,7 +414,7 @@ ol {
   align-items: center;
   gap: 10px;
   font-size: 15px;
-  font-weight: 600;
+  font-weight: 500;
   margin: 0 0 20px;
 }
 
@@ -411,14 +429,16 @@ ol {
 }
 .title-row h1,
 .bar h1 {
-  font-size: 28px;
-  font-weight: 700;
+  font-size: 20px;
+  font-weight: 600;
   line-height: 1.2;
+  letter-spacing: 0.03em;
+  font-feature-settings: 'palt' 1;
 }
 .count {
   flex: none;
   font-size: 15px;
-  font-weight: 600;
+  font-weight: 500;
   color: var(--sub);
 }
 .bar {
@@ -442,18 +462,19 @@ ol {
 }
 .date {
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 500;
   color: var(--sub);
 }
 .home-head {
   margin-bottom: 2px;
 }
 .ask {
-  font-size: clamp(28px, 8.2vw, 32px);
-  font-weight: 700;
-  line-height: 1.25;
-  letter-spacing: 0.01em;
+  font-size: clamp(24px, 7vw, 27px);
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: 0.02em;
   margin: 4px 0 20px;
+  font-feature-settings: 'palt' 1;
 }
 /* 3つの場面:写真のカード。いま開きそうな場面がいちばん大きい */
 .scenes {
@@ -471,7 +492,7 @@ ol {
   flex-direction: column;
   justify-content: flex-end;
   padding: 16px;
-  border-radius: 26px;
+  border-radius: 20px;
   background: #1d1d20;
   color: #fff;
   box-shadow: var(--lift);
@@ -502,18 +523,19 @@ ol {
 }
 .scene-name {
   display: block;
-  font-size: 19px;
-  font-weight: 700;
+  font-size: 18px;
+  font-weight: 600;
   line-height: 1.25;
+  letter-spacing: 0.04em;
 }
 .scene-big .scene-name {
-  font-size: 26px;
+  font-size: 23px;
 }
 .scene-note {
   display: block;
   margin-top: 3px;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 500;
   line-height: 1.45;
   color: rgba(255, 255, 255, 0.88);
 }
@@ -532,9 +554,10 @@ ol {
 }
 .sec-head h2,
 .group h2 {
-  font-size: 20px;
-  font-weight: 700;
+  font-size: 17px;
+  font-weight: 600;
   line-height: 1.3;
+  letter-spacing: 0.02em;
 }
 .sec-link {
   flex: none;
@@ -543,7 +566,7 @@ ol {
   min-height: 44px;
   padding-left: 8px;
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 500;
   color: var(--sub);
 }
 .soon-list {
@@ -560,11 +583,11 @@ ol {
   justify-content: center;
   gap: 8px;
   padding: 14px 6px 12px;
-  border-radius: 22px;
+  border-radius: 16px;
   background: var(--surface);
   box-shadow: var(--shadow);
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 500;
   line-height: 1.3;
   text-align: center;
 }
@@ -576,23 +599,23 @@ ol {
 
 .add-panel {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
 }
 .add-panel button {
   min-width: 0;
-  min-height: 88px;
+  min-height: 76px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 8px;
   padding: 12px 2px 10px;
-  border-radius: 22px;
+  border-radius: 16px;
   background: var(--surface);
   box-shadow: var(--shadow);
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 500;
   line-height: 1.3;
   text-align: center;
   transition: transform 0.14s var(--ease);
@@ -603,6 +626,13 @@ ol {
 .add-panel button:first-of-type {
   background: var(--primary);
   color: var(--on-primary);
+  grid-column: 1 / -1;
+  min-height: 60px;
+  flex-direction: row;
+  gap: 10px;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
 }
 .group {
   margin-top: 34px;
@@ -612,7 +642,7 @@ ol {
 }
 /* 一覧は、角の丸い1枚の板にまとめる */
 .rows {
-  border-radius: 22px;
+  border-radius: 16px;
   background: var(--surface);
   box-shadow: var(--shadow);
   overflow: hidden;
@@ -644,7 +674,7 @@ button.row:active {
   flex: 1;
   min-width: 0;
   font-size: 17px;
-  font-weight: 600;
+  font-weight: 500;
   line-height: 1.35;
 }
 .row > .icon:last-child {
@@ -653,7 +683,7 @@ button.row:active {
 .dup {
   display: block;
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 500;
   color: var(--sub);
 }
 .held {
@@ -667,7 +697,7 @@ button.row:active {
   min-height: 44px;
   margin-left: 6px;
   color: var(--ink);
-  font-weight: 600;
+  font-weight: 500;
   text-decoration: underline;
   text-underline-offset: 4px;
 }
@@ -683,7 +713,8 @@ button.row:active {
   display: inline-flex;
   align-items: center;
 }
-.mini-step button,
+/* 丸い 40px のボタン(日数の上下と、× で外す) */
+.mini-step .mini-btn,
 .row-x {
   flex: none;
   width: 40px;
@@ -693,25 +724,40 @@ button.row:active {
   border-radius: 50%;
   color: var(--sub);
 }
-.mini-step button {
+.mini-step .mini-btn {
+  display: none; /* 日数を押した行にだけ出す */
   background: var(--surface);
   color: var(--ink);
 }
-.mini-step button:disabled {
+.row-edit.open .mini-step .mini-btn {
+  display: grid;
+}
+.mini-step .mini-btn:disabled {
   opacity: 0.3;
 }
-.mini-value {
-  min-width: 48px;
-  text-align: center;
+/* 日数(押すと上下のボタンが出る) */
+.mini-step .mini-value {
+  flex: none;
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 1px;
+  min-width: 58px;
+  height: 40px;
+  padding: 9px 10px 0;
+  border-radius: 10px;
+  background: var(--surface);
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 500;
+  line-height: 1.2;
   white-space: nowrap;
 }
+.row-edit.open .mini-step .mini-value {
+  box-shadow: inset 0 0 0 1.5px var(--ink);
+}
 .mini-value b {
-  font-family: var(--round);
   font-size: 18px;
   font-weight: 600;
-  margin-right: 1px;
 }
 .add-one {
   display: flex;
@@ -738,6 +784,9 @@ button.row:active {
 }
 .picks-center {
   justify-content: center;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
 }
 .pick {
   display: inline-flex;
@@ -745,10 +794,10 @@ button.row:active {
   gap: 4px;
   min-height: 48px;
   padding: 8px 17px;
-  border-radius: 999px;
+  border-radius: 12px;
   background: var(--fill);
   font-size: 16px;
-  font-weight: 600;
+  font-weight: 500;
   transition:
     transform 0.12s var(--ease),
     background 0.15s;
@@ -762,12 +811,30 @@ button.row:active {
   font-size: 17px;
 }
 .pick-on {
-  background: var(--primary);
-  color: var(--on-primary);
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: inset 0 0 0 1.5px var(--ink);
+  font-weight: 600;
 }
 .pick-n {
   font-family: var(--round);
   font-size: 13px;
+}
+
+.picks-center .pick {
+  justify-content: center;
+  min-width: 0;
+  padding: 8px 0;
+  font-size: 14px;
+}
+.times {
+  margin-left: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--sub);
+}
+.home > .empty {
+  margin: 0 0 16px;
 }
 
 /* ───────── 下から出るシート ───────── */
@@ -800,7 +867,7 @@ button.row:active {
   flex-direction: column;
   max-height: 94%;
   background: var(--surface);
-  border-radius: 30px 30px 0 0;
+  border-radius: 22px 22px 0 0;
   box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.18);
   animation: rise 0.32s var(--ease);
 }
@@ -824,9 +891,10 @@ button.row:active {
 }
 .sheet-head h2 {
   min-width: 0;
-  font-size: 24px;
-  font-weight: 700;
+  font-size: 20px;
+  font-weight: 600;
   line-height: 1.3;
+  letter-spacing: 0.02em;
 }
 .sheet-body {
   flex: 1;
@@ -850,7 +918,7 @@ button.row:active {
   width: 100%;
   margin-bottom: 14px;
   padding: 0 0 18px;
-  border-radius: 28px;
+  border-radius: 20px;
   background: var(--surface);
   box-shadow: var(--shadow);
   overflow: hidden;
@@ -871,9 +939,11 @@ button.dish:active {
   margin-bottom: 4px;
 }
 .dish-title {
-  font-size: 21px;
-  font-weight: 700;
+  font-size: 19px;
+  font-weight: 600;
   line-height: 1.35;
+  letter-spacing: 0.02em;
+  font-feature-settings: 'palt' 1;
 }
 .dish-lead {
   font-size: 14px;
@@ -887,34 +957,35 @@ button.dish:active {
   gap: 6px 8px;
   margin-top: 12px;
 }
-.tag,
-.dish-soon,
-.dish-meta .meta {
+.dish-meta .meta,
+.tag {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  min-height: 28px;
-  padding: 3px 11px;
-  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--sub);
+}
+.tag::before {
+  content: '・';
+  margin: 0 -2px 0 -10px;
+}
+.dish-soon {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 8px;
   font-size: 13px;
   font-weight: 600;
   line-height: 1.4;
 }
-.dish-meta .meta {
-  background: var(--fill);
-  color: var(--ink);
-}
-.tag-home {
-  background: var(--fresh-tint);
-  color: var(--fresh-ink);
-}
-.tag-buy {
-  background: var(--warm-tint);
-  color: var(--warm-ink);
-}
-.dish-soon {
-  background: var(--hot-tint);
-  color: var(--hot-ink);
+.dish-soon::before {
+  content: '';
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--warm);
 }
 .photo {
   position: relative;
@@ -953,7 +1024,7 @@ button.dish:active {
   gap: 8px;
   padding: 12px;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 500;
   color: var(--sub);
   text-align: center;
 }
@@ -963,10 +1034,10 @@ button.dish:active {
   gap: 6px;
   min-height: 44px;
   padding: 8px 18px;
-  border-radius: 999px;
+  border-radius: 12px;
   background: var(--surface);
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 500;
 }
 .screen > .btn-line {
   margin-top: 6px;
@@ -982,13 +1053,15 @@ button.dish:active {
   position: relative;
   margin-top: -28px;
   padding: 26px var(--pad) 12px;
-  border-radius: 30px 30px 0 0;
+  border-radius: 22px 22px 0 0;
   background: var(--bg);
 }
 .recipe-title {
-  font-size: 28px;
-  font-weight: 700;
+  font-size: 24px;
+  font-weight: 600;
   line-height: 1.28;
+  letter-spacing: 0.02em;
+  font-feature-settings: 'palt' 1;
 }
 .recipe-lead {
   font-size: 16px;
@@ -998,24 +1071,18 @@ button.dish:active {
 .recipe-meta {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 4px 14px;
   margin-top: 14px;
 }
-.recipe-meta .meta {
-  min-height: 30px;
-  padding: 3px 12px;
-  border-radius: 999px;
-  background: var(--fill);
-  color: var(--ink);
-}
 .recipe h2 {
-  font-size: 22px;
-  font-weight: 700;
+  font-size: 18px;
+  font-weight: 600;
   margin: 32px 0 12px;
+  letter-spacing: 0.04em;
 }
 .ing {
   margin-top: 10px;
-  border-radius: 22px;
+  border-radius: 16px;
   background: var(--surface);
   box-shadow: var(--shadow);
   overflow: hidden;
@@ -1023,14 +1090,14 @@ button.dish:active {
 .ing h3 {
   padding: 13px 16px 2px;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 500;
   color: var(--sub);
 }
 .ing-fridge h3 {
-  color: var(--fresh-ink);
+  color: var(--sub);
 }
 .ing-buy h3 {
-  color: var(--warm-ink);
+  color: var(--ink);
 }
 .ing li {
   display: flex;
@@ -1039,7 +1106,7 @@ button.dish:active {
   gap: 16px;
   padding: 12px 16px;
   font-size: 17px;
-  font-weight: 600;
+  font-weight: 500;
 }
 .ing li + li {
   border-top: 1px solid var(--hair);
@@ -1080,7 +1147,7 @@ button.dish:active {
   background: var(--fill);
   font-family: var(--round);
   font-size: 16px;
-  font-weight: 600;
+  font-weight: 500;
   line-height: 1;
   transition:
     background 0.2s,
@@ -1111,7 +1178,7 @@ button.dish:active {
 .tip {
   margin-top: 22px;
   padding: 16px 18px;
-  border-radius: 22px;
+  border-radius: 16px;
   background: var(--surface);
   box-shadow: var(--shadow);
   font-size: 16px;
@@ -1120,7 +1187,7 @@ button.dish:active {
   display: block;
   margin-bottom: 2px;
   font-size: 13px;
-  color: var(--warm-ink);
+  color: var(--sub);
 }
 .outlink {
   display: flex;
@@ -1131,7 +1198,7 @@ button.dish:active {
   margin-top: 18px;
   color: var(--sub);
   font-size: 15px;
-  font-weight: 600;
+  font-weight: 500;
   text-decoration: none;
 }
 .dock {
@@ -1158,7 +1225,7 @@ button.dish:active {
   align-items: center;
   width: 100%;
   padding: 16px 12px 16px 18px;
-  border-radius: 24px;
+  border-radius: 18px;
   background: var(--surface);
   box-shadow: var(--shadow);
   transition: transform 0.16s var(--ease);
@@ -1174,25 +1241,26 @@ button.idea:active {
 .idea-buy {
   grid-column: 1;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 500;
   color: var(--sub);
 }
 .idea-buy b {
-  display: inline-block;
-  margin-right: 6px;
-  padding: 2px 11px;
-  border-radius: 999px;
-  background: var(--primary);
-  color: var(--on-primary);
+  display: inline;
+  margin-right: 5px;
+  padding: 0;
+  border-radius: 0;
+  background: none;
+  color: var(--ink);
   font-size: 15px;
-  font-weight: 600;
+  font-weight: 500;
 }
 .idea-dish {
   grid-column: 1;
-  font-size: 20px;
-  font-weight: 700;
+  font-size: 18px;
+  font-weight: 600;
   line-height: 1.35;
   margin-top: 8px;
+  letter-spacing: 0.02em;
 }
 .idea-uses {
   grid-column: 1;
@@ -1202,7 +1270,7 @@ button.idea:active {
   gap: 2px 12px;
   margin-top: 3px;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 500;
   color: var(--sub);
 }
 .idea-skel {
@@ -1218,11 +1286,11 @@ button.idea:active {
   align-items: center;
   gap: 7px;
   padding: 7px 13px 7px 11px;
-  border-radius: 999px;
+  border-radius: 10px;
   background: var(--surface);
   box-shadow: var(--shadow);
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 500;
 }
 .have li::before {
   content: '';
@@ -1243,13 +1311,13 @@ button.idea:active {
 .set {
   margin-top: 14px;
   padding: 18px;
-  border-radius: 24px;
+  border-radius: 18px;
   background: var(--surface);
   box-shadow: var(--shadow);
 }
 .set h2 {
   font-size: 17px;
-  font-weight: 700;
+  font-weight: 600;
   margin-bottom: 6px;
 }
 .set .hint {
@@ -1257,13 +1325,13 @@ button.idea:active {
 }
 .usage {
   font-size: 15px;
-  font-weight: 600;
+  font-weight: 500;
   color: var(--sub);
 }
 .usage b {
-  font-family: var(--round);
-  font-size: 34px;
-  font-weight: 600;
+  font-family: var(--font);
+  font-size: 30px;
+  font-weight: 300;
   color: var(--ink);
 }
 .stepper {
@@ -1277,13 +1345,13 @@ button.idea:active {
   min-width: 108px;
   text-align: center;
   font-size: 15px;
-  font-weight: 600;
+  font-weight: 500;
   white-space: nowrap;
 }
 .stepper-value b {
-  font-family: var(--round);
-  font-size: 48px;
-  font-weight: 600;
+  font-family: var(--font);
+  font-size: 40px;
+  font-weight: 300;
   line-height: 1;
   margin-right: 4px;
 }
@@ -1293,13 +1361,13 @@ button.idea:active {
 .empty {
   margin-top: 18px;
   padding: 26px 22px 22px;
-  border-radius: 28px;
+  border-radius: 20px;
   background: var(--surface);
   box-shadow: var(--shadow);
 }
 .empty-title {
-  font-size: 21px;
-  font-weight: 700;
+  font-size: 18px;
+  font-weight: 600;
   line-height: 1.35;
   margin-bottom: 8px;
 }
@@ -1317,7 +1385,7 @@ button.idea:active {
   position: absolute;
   z-index: 40;
   left: 50%;
-  top: calc(var(--top) + 10px);
+  top: auto;
   max-width: calc(100% - 32px);
   width: max-content;
   transform: translateX(-50%);
@@ -1325,16 +1393,18 @@ button.idea:active {
   align-items: center;
   gap: 12px;
   padding: 12px 18px;
-  border-radius: 999px;
+  border-radius: 14px;
   background: rgba(28, 28, 30, 0.92);
   -webkit-backdrop-filter: blur(18px);
   backdrop-filter: blur(18px);
   color: #fff;
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 500;
   line-height: 1.4;
   box-shadow: 0 10px 30px -8px rgba(0, 0, 0, 0.45);
   animation: pop 0.28s var(--ease);
+  bottom: calc(var(--bottom) + 88px);
+  pointer-events: none;
 }
 .toast button {
   flex: none;
@@ -1342,7 +1412,8 @@ button.idea:active {
   margin: -10px -8px -10px 0;
   padding: 2px 8px;
   color: #ffd27a;
-  font-weight: 600;
+  font-weight: 500;
+  pointer-events: auto;
 }
 
 /* ───────── 扉(黒いガラスの扉が開いて、庫内の光がこぼれる) ───────── */
@@ -1363,7 +1434,7 @@ button.idea:active {
   inset: 0;
   background: #fff;
   opacity: 0;
-  animation: bloom 0.9s 0.12s ease-out both;
+  animation: bloom 0.7s ease-out both;
 }
 .door-leaf {
   position: absolute;
@@ -1375,16 +1446,17 @@ button.idea:active {
     linear-gradient(160deg, #232327 0%, #0c0c0e 55%, #050506 100%);
 }
 .door-open .door-leaf {
-  animation: swing 0.8s 0.12s cubic-bezier(0.6, 0.04, 0.3, 1) both;
+  animation: swing 0.6s cubic-bezier(0.6, 0.04, 0.3, 1) both;
 }
 .door-handle {
   position: absolute;
-  top: 34%;
-  right: 20px;
-  width: 4px;
-  height: 32%;
-  border-radius: 2px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.5) 50%, rgba(255, 255, 255, 0.1));
+  top: 30%;
+  right: 22px;
+  width: 10px;
+  height: 40%;
+  border-radius: 5px;
+  background: linear-gradient(90deg, #5a5a60, #d9d9de 45%, #77777d);
+  box-shadow: -6px 0 14px rgba(0, 0, 0, 0.5);
 }
 .door-face {
   position: absolute;
@@ -1392,29 +1464,33 @@ button.idea:active {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  padding: var(--top) 48px var(--bottom) 32px;
+  padding: var(--top) 60px var(--bottom) 32px;
 }
 .wordmark {
-  font-size: clamp(26px, 8.4vw, 34px);
-  font-weight: 600;
-  letter-spacing: 0;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.34em;
   line-height: 1.15;
-  color: #fff;
+  color: rgba(255, 255, 255, 0.6);
   white-space: nowrap;
+  text-transform: uppercase;
 }
 .door-tag {
-  margin-top: 10px;
-  font-size: 15px;
+  margin-top: 14px;
+  font-size: 24px;
   font-weight: 600;
-  color: rgba(255, 255, 255, 0.72);
+  color: #fff;
+  line-height: 1.45;
+  letter-spacing: 0.04em;
 }
 .door-form {
-  margin-top: 44px;
+  margin-top: 36px;
+  max-width: 320px;
 }
 .door-form label {
   display: block;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 500;
   color: rgba(255, 255, 255, 0.72);
   margin-bottom: 8px;
 }
@@ -1424,8 +1500,17 @@ button.idea:active {
 .door-error {
   margin-top: 10px;
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 500;
   color: #ff8a7a;
+}
+
+.door-form .btn:disabled {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.4);
+}
+.door-open .door-face {
+  animation: fade 0.15s ease-in reverse both;
 }
 
 /* ───────── 動き ───────── */
@@ -1443,7 +1528,7 @@ button.idea:active {
 @keyframes pop {
   from {
     opacity: 0;
-    transform: translateX(-50%) translateY(-12px) scale(0.96);
+    transform: translateX(-50%) translateY(10px) scale(0.96);
   }
 }
 @keyframes shimmer {
