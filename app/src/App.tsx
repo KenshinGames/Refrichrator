@@ -97,7 +97,7 @@ function Door({ locked }: { locked: boolean }) {
         <span className="door-handle" />
         <div className="door-face">
           <div className="door-inner">
-            <p className="wordmark">Refricherator</p>
+            <p className="wordmark">Refrichrator</p>
             <p className="door-tag">冷蔵庫を、リッチに使い切る。</p>
             {locked && (
               <form className="door-form" onSubmit={submit}>

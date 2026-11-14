@@ -7,7 +7,7 @@ import { OUT, sleep } from './lib.mjs';
 const invite = readFileSync(new URL('../../.env.local', import.meta.url), 'utf8').match(/REFRICHERATOR_INVITE=(.+)/)[1].trim();
 const tag = Math.random().toString(36).slice(2, 8);
 const ME = { name: `確認用-${tag}`, password: `check-${tag}-1` };
-const BASE = process.env.PROD_BASE ?? 'https://kenshingames.github.io/Refricherator/';
+const BASE = process.env.PROD_BASE ?? 'https://kenshingames.github.io/Refrichrator/';
 const browser = await puppeteer.launch({ executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', headless: true });
 const page = await (await browser.createBrowserContext()).newPage();
 await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 2, isMobile: true, hasTouch: true });

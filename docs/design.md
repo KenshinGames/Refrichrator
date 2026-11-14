@@ -1,4 +1,4 @@
-# Refricherator 設計メモ
+# Refrichrator 設計メモ
 
 冷蔵庫をリッチに使い切る。家にある食材から、今日つくる料理を提案するアプリ。
 
@@ -52,7 +52,7 @@ tools/                    手元用の API、画面の自動テスト
 index.html, assets/       公開用に作ったもの(GitHub Pages が main の直下を公開する設定のため)
 ```
 
-- 公開先:https://kenshingames.github.io/Refricherator/
+- 公開先:https://kenshingames.github.io/Refrichrator/
 - Supabase:プロジェクト `refricherator`(東京)。テーブルは `items`(食材)、`recipes`(提案したレシピ)、`kv`(設定・利用数・秘密の値)。どれもアプリからは直接読めず、中継サーバーだけが触る
 - Gemini のキーと招待コード(`secret:passhash`、元に戻せない形)は `kv` に入れる。アカウントは `users`、ログイン中の端末は `sessions`、まちがえた回数は `gate`(接続元はハッシュ)。Gemini のキーを替えるときは、Supabase の Edge Function の秘密の値 `GEMINI_API_KEY` に入れる(こちらが優先される)
 
