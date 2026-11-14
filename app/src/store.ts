@@ -2,13 +2,14 @@
 // 画面はいつも手元の状態をすぐに描き、サーバーとの同期は裏で行う(押してから待たせない)。
 import { useSyncExternalStore } from 'react';
 import { addDays, daysBetween, DEFAULT_SETTINGS, todayJst } from '../../supabase/functions/api/core.ts';
-import type { Item, NewItem, Recipe, Scene, Settings, ShoppingIdea, Staple, Usage } from '../../supabase/functions/api/core.ts';
+import type { Item, Limits, NewItem, Recipe, Scene, Settings, ShoppingIdea, Staple, Usage } from '../../supabase/functions/api/core.ts';
 
 export type { Item, NewItem, Recipe, Scene, Settings, ShoppingIdea, Staple };
 
 const PROD_API = 'https://vphcejuxczbttkuzqnlv.supabase.co/functions/v1/api';
 const API_URL: string = import.meta.env.VITE_API_URL ?? (import.meta.env.DEV ? `http://${location.hostname}:8791/functions/v1/api` : PROD_API);
 const CACHE_KEY = 'refricherator:v1';
+const NAME_KEY = 'refricherator:name'; // 最後にログインした名前(ログアウトしても残す)
 
 export class ApiError extends Error {
   code: string;
@@ -26,13 +27,13 @@ interface Batch {
   day: string;
 }
 export interface State {
-  pass: string | null;
+  session: { token: string; name: string } | null;
   synced: boolean; // この起動で1回でもサーバーと同期できたか
   items: Item[];
   staples: Staple[];
   settings: Settings;
   usage: Usage;
-  limits: { images: number; texts: number };
+  limits: Limits;
   recipes: Record<string, Recipe>;
   batches: Partial<Record<Scene, Batch>>;
   sceneLoading: Partial<Record<Scene, boolean>>;
@@ -48,13 +49,13 @@ export interface State {
 }
 
 let state: State = {
-  pass: null,
+  session: null,
   synced: false,
   items: [],
   staples: [],
   settings: DEFAULT_SETTINGS,
   usage: { images: 0, texts: 0 },
-  limits: { images: 180, texts: 1500 },
+  limits: { images: 60, allImages: 180, texts: 600 },
   recipes: {},
   batches: {},
   sceneLoading: {},
@@ -101,7 +102,7 @@ function schedulePersist(): void {
       .slice(0, 30)
       .map((r) => (r.imageUrl?.startsWith('data:') ? { ...r, imageUrl: null } : r));
     const keep = {
-      pass: state.pass,
+      session: state.session,
       items: state.items,
       staples: state.staples,
       settings: state.settings,
@@ -137,7 +138,7 @@ async function api<T>(action: string, body: Record<string, unknown> = {}, timeou
   try {
     res = await fetch(API_URL, {
       method: 'POST',
-      headers: { 'content-type': 'application/json', 'x-passcode': state.pass ?? '' },
+      headers: { 'content-type': 'application/json', 'x-session': state.session?.token ?? '' },
       body: JSON.stringify({ action, ...body }),
       signal: ctrl.signal,
     });
@@ -149,9 +150,8 @@ async function api<T>(action: string, body: Record<string, unknown> = {}, timeou
   const data = await res.json().catch(() => null);
   if (!res.ok || !data) {
     const err = data?.error;
-    if (res.status === 401) {
-      set({ pass: null });
-    }
+    // ログインが切れていたら、扉にもどす
+    if (res.status === 401 && err?.code === 'session') set({ session: null });
     throw new ApiError(err?.code ?? 'server', err?.message ?? 'うまくいきませんでした。もう一度お試しください。', res.status);
   }
   return data as T;
@@ -189,9 +189,10 @@ export function closeToast(): void {
   set({ toast: null });
 }
 
-// ───────── 起動と合言葉 ─────────
+// ───────── 起動とログイン ─────────
 
 interface SyncResult {
+  name?: string;
   items: Item[];
   settings: Settings;
   staples: Staple[];
@@ -204,24 +205,44 @@ export function boot(): void {
   // 合言葉は URL からは受け取らない(リンクを送ると、トークの履歴などから見えてしまうため)。
   // 以前の形のリンク(…#k=合言葉)で開かれたときは、使わずにアドレス欄から消すだけにする。
   if (/[#&?]k=/.test(location.hash + location.search)) history.replaceState(null, '', location.pathname);
-  if (state.pass) void sync();
+  if (state.session) void sync();
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible' && state.pass) void sync();
+    if (document.visibilityState === 'visible' && state.session) void sync();
   });
 }
 
-/** 合言葉を入れる。合っていれば true */
-export async function enter(pass: string): Promise<string | null> {
-  set({ pass: pass.trim() });
+/** 最後にこの端末でログインした名前 */
+export function lastName(): string {
   try {
-    applySync(await api<SyncResult>('sync', {}, 20_000));
+    return localStorage.getItem(NAME_KEY) ?? '';
+  } catch {
+    return '';
+  }
+}
+
+/** 登録またはログインする。うまくいけば null、だめなら画面に出す文を返す */
+export async function signIn(mode: 'signup' | 'login', input: { name: string; password: string; invite?: string }): Promise<string | null> {
+  try {
+    const r = await api<{ token: string; name: string }>(mode, input, 30_000);
+    try {
+      localStorage.setItem(NAME_KEY, r.name);
+    } catch {
+      // 何もしない
+    }
+    set({ session: { token: r.token, name: r.name } });
+    await sync();
     return null;
   } catch (e) {
-    set({ pass: null });
     return message(e);
   }
 }
-export function leave(): void {
+
+/** ログアウトする。この端末に残した中身も消す */
+export async function leave(): Promise<void> {
+  await api('logout', {}, 5_000).catch(() => {});
+  clearLocal();
+}
+function clearLocal(): void {
   try {
     localStorage.removeItem(CACHE_KEY);
   } catch {
@@ -230,8 +251,32 @@ export function leave(): void {
   location.reload();
 }
 
+/** アカウントを消す。うまくいけば null、だめなら画面に出す文を返す */
+export async function deleteAccount(password: string): Promise<string | null> {
+  try {
+    await api('delete_account', { password }, 30_000);
+    try {
+      localStorage.removeItem(NAME_KEY);
+    } catch {
+      // 何もしない
+    }
+    clearLocal();
+    return null;
+  } catch (e) {
+    return message(e);
+  }
+}
+
 function applySync(r: SyncResult): void {
-  set({ items: sortItems(r.items), settings: r.settings, staples: r.staples, usage: r.usage, limits: r.limits, synced: true });
+  set({
+    items: sortItems(r.items),
+    settings: r.settings,
+    staples: r.staples,
+    usage: r.usage,
+    limits: r.limits,
+    synced: true,
+    ...(r.name && state.session ? { session: { ...state.session, name: r.name } } : {}),
+  });
   prewarmSoon(600);
 }
 
@@ -248,7 +293,7 @@ let prewarmTimer: number | undefined;
 function prewarmSoon(delay: number): void {
   window.clearTimeout(prewarmTimer);
   prewarmTimer = window.setTimeout(() => {
-    if (document.visibilityState !== 'visible' || !state.pass || !state.synced || pending > 0) return;
+    if (document.visibilityState !== 'visible' || !state.session || !state.synced || pending > 0) return;
     void loadScene(likelyScene(), false, false);
   }, delay);
 }

@@ -1,71 +1,138 @@
 // テストと手元の確認で使う、メモリ上の保存先と、にせものの AI。
 import { readFileSync } from 'node:fs';
+import type { Account, Accounts } from '../supabase/functions/api/auth.ts';
 import type { AI, Item, Part, Recipe, Store } from '../supabase/functions/api/core.ts';
 
-export function makeMemoryStore(): Store & { dump(): { items: (Item & { gone?: boolean })[]; recipes: Recipe[]; kv: Map<string, unknown> } } {
-  const items: (Item & { gone?: boolean })[] = [];
-  const recipes: Recipe[] = [];
+type Owned<T> = T & { owner: string; gone?: boolean };
+
+/** メモリ上のデータベース。人ごとの保存先(forUser)と、アカウントを持つ */
+export function makeMemoryDb() {
+  const users: Account[] = [];
+  const userKeys = new Map<string, string>(); // name_key → id
+  const sessions = new Map<string, string>(); // token_hash → user id
+  const items: Owned<Item>[] = [];
+  const recipes: Owned<Recipe>[] = [];
   const kv = new Map<string, unknown>();
   const gates = new Map<string, { count: number; since: number }>();
   let seq = 0;
   const id = () => `00000000-0000-4000-8000-${String(++seq).padStart(12, '0')}`;
-  return {
-    dump: () => ({ items, recipes, kv }),
-    async listItems() {
-      return items
-        .filter((i) => !i.gone)
-        .map(({ gone: _gone, ...i }) => i)
-        .sort((a, b) => a.expiresOn.localeCompare(b.expiresOn) || a.name.localeCompare(b.name, 'ja'));
+  const strip = <T,>({ owner: _o, gone: _g, ...rest }: Owned<T>) => rest as unknown as T;
+
+  async function attempt(key: string, wrong: boolean, tries: number, windowSeconds: number, now: Date) {
+    // 読んでから書くまでに await をはさまないので、同時に呼ばれても数えもれしない
+    const t = now.getTime();
+    const r = gates.get(key) ?? { count: 0, since: t };
+    const live = r.count > 0 && t - r.since < windowSeconds * 1000;
+    if (live && r.count >= tries) return true;
+    if (wrong) gates.set(key, live ? { count: r.count + 1, since: r.since } : { count: 1, since: t });
+    else gates.set(key, { count: 0, since: t });
+    return false;
+  }
+  const imagesSince = (sinceIso: string, owner?: string) =>
+    recipes.filter((r) => r.imageUrl && (!owner || r.owner === owner) && r.createdAt >= new Date(sinceIso).toISOString()).length;
+
+  const accounts: Accounts = {
+    async find(nameKey) {
+      const uid = userKeys.get(nameKey);
+      return uid ? { ...users.find((u) => u.id === uid)! } : null;
     },
-    async addItems(rows) {
-      for (const r of rows) items.push({ ...r, id: r.id ?? id() });
+    async findById(uid) {
+      const u = users.find((x) => x.id === uid);
+      return u ? { ...u } : null;
     },
-    async updateItem(itemId, patch) {
-      const it = items.find((i) => i.id === itemId);
-      if (it) Object.assign(it, patch);
+    async create(name, nameKey, passHash) {
+      if (userKeys.has(nameKey)) return null;
+      const uid = id();
+      users.push({ id: uid, name, passHash });
+      userKeys.set(nameKey, uid);
+      return uid;
     },
-    async removeItems(ids) {
-      for (const it of items) if (ids.includes(it.id)) it.gone = true;
+    async addSession(tokenHash, uid) {
+      sessions.set(tokenHash, uid);
     },
-    async getKv<T>(key: string) {
-      return (kv.has(key) ? structuredClone(kv.get(key)) : null) as T | null;
+    async session(tokenHash) {
+      const uid = sessions.get(tokenHash);
+      const u = uid && users.find((x) => x.id === uid);
+      return u ? { id: u.id, name: u.name } : null;
     },
-    async setKv(key, value) {
-      kv.set(key, structuredClone(value));
+    async dropSession(tokenHash) {
+      sessions.delete(tokenHash);
     },
-    async saveRecipes(rows) {
-      const saved = rows.map((r) => ({ ...r, id: id(), imageUrl: null, cookedAt: null, createdAt: new Date().toISOString() }));
-      recipes.push(...saved);
-      return saved.map((r) => ({ ...r }));
-    },
-    async getRecipe(recipeId) {
-      const r = recipes.find((x) => x.id === recipeId);
-      return r ? { ...r } : null;
-    },
-    async updateRecipe(recipeId, patch) {
-      const r = recipes.find((x) => x.id === recipeId);
-      if (r) Object.assign(r, patch);
-    },
-    async recentRecipes(limit) {
-      return recipes.slice(-limit).reverse().map((r) => ({ ...r }));
-    },
-    async attempt(key, wrong, tries, windowSeconds, now) {
-      // 読んでから書くまでに await をはさまないので、同時に呼ばれても数えもれしない
-      const t = now.getTime();
-      const r = gates.get(key) ?? { count: 0, since: t };
-      const live = r.count > 0 && t - r.since < windowSeconds * 1000;
-      if (live && r.count >= tries) return true;
-      if (wrong) gates.set(key, live ? { count: r.count + 1, since: r.since } : { count: 1, since: t });
-      else gates.set(key, { count: 0, since: t });
-      return false;
-    },
-    async countImages(sinceIso) {
-      return recipes.filter((r) => r.imageUrl && r.createdAt >= new Date(sinceIso).toISOString()).length;
-    },
-    async uploadImage(_path, bytes, mime) {
-      return `data:${mime};base64,${Buffer.from(bytes).toString('base64')}`;
+    async remove(uid) {
+      const i = users.findIndex((u) => u.id === uid);
+      if (i >= 0) users.splice(i, 1);
+      for (const [k, v] of userKeys) if (v === uid) userKeys.delete(k);
+      for (const [k, v] of sessions) if (v === uid) sessions.delete(k);
     },
   };
+
+  function forUser(owner: string): Store & { dump(): { items: Owned<Item>[]; recipes: Owned<Recipe>[]; kv: Map<string, unknown> } } {
+    const p = `u:${owner}:`;
+    const mine = <T extends { owner: string }>(list: T[]) => list.filter((x) => x.owner === owner);
+    return {
+      dump: () => ({ items: mine(items), recipes: mine(recipes), kv }),
+      async listItems() {
+        return mine(items)
+          .filter((i) => !i.gone)
+          .map((i) => strip<Item>(i))
+          .sort((a, b) => a.expiresOn.localeCompare(b.expiresOn) || a.name.localeCompare(b.name, 'ja'));
+      },
+      async addItems(rows) {
+        for (const r of rows) items.push({ ...r, id: r.id ?? id(), owner });
+      },
+      async updateItem(itemId, patch) {
+        const it = mine(items).find((i) => i.id === itemId);
+        if (it) Object.assign(it, patch);
+      },
+      async removeItems(ids) {
+        for (const it of mine(items)) if (ids.includes(it.id)) it.gone = true;
+      },
+      async getKv<T>(key: string) {
+        return (kv.has(p + key) ? structuredClone(kv.get(p + key)) : null) as T | null;
+      },
+      async setKv(key, value) {
+        kv.set(p + key, structuredClone(value));
+      },
+      async saveRecipes(rows) {
+        const saved = rows.map((r) => ({ ...r, id: id(), imageUrl: null, cookedAt: null, createdAt: new Date().toISOString(), owner }));
+        recipes.push(...saved);
+        return saved.map((r) => strip<Recipe>(r));
+      },
+      async getRecipe(recipeId) {
+        const r = mine(recipes).find((x) => x.id === recipeId);
+        return r ? strip<Recipe>(r) : null;
+      },
+      async updateRecipe(recipeId, patch) {
+        const r = mine(recipes).find((x) => x.id === recipeId);
+        if (r) Object.assign(r, patch);
+      },
+      async recentRecipes(limit) {
+        return mine(recipes).slice(-limit).reverse().map((r) => strip<Recipe>(r));
+      },
+      attempt,
+      async countImages(sinceIso) {
+        return imagesSince(sinceIso, owner);
+      },
+      async countAllImages(sinceIso) {
+        return imagesSince(sinceIso);
+      },
+      async uploadImage(_path, bytes, mime) {
+        return `data:${mime};base64,${Buffer.from(bytes).toString('base64')}`;
+      },
+      async wipe() {
+        for (let i = items.length - 1; i >= 0; i--) if (items[i].owner === owner) items.splice(i, 1);
+        for (let i = recipes.length - 1; i >= 0; i--) if (recipes[i].owner === owner) recipes.splice(i, 1);
+        for (const k of [...kv.keys()]) if (k.startsWith(p)) kv.delete(k);
+      },
+    };
+  }
+
+  return { accounts, forUser, attempt, kv };
+}
+
+/** 1人分の保存先(処理の本体のテスト用) */
+export function makeMemoryStore() {
+  return makeMemoryDb().forUser('00000000-0000-4000-8000-0000000000aa');
 }
 
 const KNOWN: [string, string, number][] = [

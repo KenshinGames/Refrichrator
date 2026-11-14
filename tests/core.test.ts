@@ -270,7 +270,7 @@ describe('提案', () => {
     expect(res.recipes[0].ingredients.some((i: any) => i.source === 'buy' && i.name === '長ねぎ')).toBe(true);
   });
   it('文章の上限を超えると断る', async () => {
-    const t = setup({ images: 5, texts: 1 });
+    const t = setup({ images: 5, allImages: 50, texts: 1 });
     await t.call('add', { items: [{ name: '卵', category: '卵・乳製品', days: 14 }] });
     await t.call('suggest', { scene: 'tired' });
     await expect(t.call('suggest', { scene: 'tired' })).rejects.toMatchObject({ code: 'limit', status: 429 });
@@ -279,7 +279,7 @@ describe('提案', () => {
 
 describe('写真', () => {
   it('作って保存し、2回目は作り直さない。上限を超えたら作らない', async () => {
-    const t = setup({ images: 2, texts: 100 });
+    const t = setup({ images: 2, allImages: 50, texts: 100 });
     await t.call('add', { items: [{ name: '卵', category: '卵・乳製品', days: 14 }] });
     const { recipes } = (await t.call('suggest', { scene: 'tired' })) as { recipes: Recipe[] };
     const a = await t.call('image', { id: recipes[0].id });

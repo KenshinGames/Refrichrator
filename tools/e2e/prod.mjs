@@ -4,7 +4,9 @@ import { readFileSync } from 'node:fs';
 import puppeteer from 'puppeteer-core';
 import { OUT, sleep } from './lib.mjs';
 
-const pass = readFileSync(new URL('../../.env.local', import.meta.url), 'utf8').match(/REFRICHERATOR_PASSCODE=(.+)/)[1].trim();
+const invite = readFileSync(new URL('../../.env.local', import.meta.url), 'utf8').match(/REFRICHERATOR_INVITE=(.+)/)[1].trim();
+const tag = Math.random().toString(36).slice(2, 8);
+const ME = { name: `確認用-${tag}`, password: `check-${tag}-1` };
 const BASE = process.env.PROD_BASE ?? 'https://kenshingames.github.io/Refricherator/';
 const browser = await puppeteer.launch({ executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', headless: true });
 const page = await (await browser.createBrowserContext()).newPage();
@@ -18,9 +20,11 @@ const shot = (n) => page.screenshot({ path: `${OUT}prod-${n}.png` });
 const time = async (label, fn) => { const t = Date.now(); await fn(); console.log(`${label}: ${Date.now() - t}ms`); };
 
 await page.goto(BASE, { waitUntil: 'domcontentloaded' });
-await has('扉を開ける');
-await page.type('#pass', pass);
-await time('合言葉を入れる → ホーム', async () => { await tap('扉を開ける'); await has('なに作る'); });
+await has('はじめて使う');
+await page.type('#name', ME.name);
+await page.type('#password', ME.password);
+await page.type('#invite', invite);
+await time('登録する → ホーム', async () => { await page.click('.door-form .btn'); await has('なに作る'); });
 await sleep(1300);
 await tap('冷蔵庫');
 await tap('話す・打つ');
@@ -54,4 +58,8 @@ await time('買い物の案が出るまで', () => has('を買うと', 30000));
 await sleep(300);
 await shot('shop');
 console.log('ブラウザのエラー:', errors.length ? errors : 'なし');
+// 確認用のアカウントを消す
+const token = await page.evaluate(() => JSON.parse(localStorage.getItem('refricherator:v1') ?? '{}').session?.token);
+const del = await fetch('https://vphcejuxczbttkuzqnlv.supabase.co/functions/v1/api', { method: 'POST', headers: { 'content-type': 'application/json', 'x-session': token }, body: JSON.stringify({ action: 'delete_account', password: ME.password }) });
+console.log('確認用のアカウントを削除:', del.status === 200 ? 'できた' : 'できなかった ' + del.status);
 await browser.close();

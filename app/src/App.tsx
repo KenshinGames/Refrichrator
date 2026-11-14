@@ -2,23 +2,23 @@
 import { useEffect, useState } from 'react';
 import { IdeaScreen, RecipeScreen, SCENE_INFO, SceneScreen } from './Cook.tsx';
 import { Fridge, stack } from './Fridge.tsx';
-import { batchFor, daysLeft, enter, leave, likelyScene, loadShopping, saveSettings, useStore } from './store.ts';
+import { batchFor, daysLeft, deleteAccount, lastName, leave, likelyScene, loadShopping, saveSettings, signIn, useStore } from './store.ts';
 import type { Scene } from './store.ts';
-import { back, go, Icon, ideaPath, leftLabel, leftTone, Ring, Stepper, Toast, useRoute, useVisualViewport } from './ui.tsx';
+import { back, go, Icon, ideaPath, leftLabel, leftTone, Ring, Sheet, Stepper, Toast, useRoute, useVisualViewport } from './ui.tsx';
 
 const SCENE_ORDER: Scene[] = ['tired', 'holiday', 'bento'];
 const WEEK = ['日', '月', '火', '水', '木', '金', '土'];
 
 export function App() {
   useVisualViewport();
-  const pass = useStore((s) => s.pass);
+  const signedIn = useStore((s) => !!s.session);
   const route = useRoute();
   const tab = route.name === 'home' || route.name === 'fridge' || route.name === 'shop' ? route.name : null;
   const key = route.name + ('scene' in route ? route.scene : '') + ('id' in route ? route.id : '') + ('dish' in route ? route.dish : '');
 
   return (
     <div className="app">
-      {pass && (
+      {signedIn && (
         <>
           <main className={tab ? 'stage stage-tabs' : 'stage'} key={key}>
             {route.name === 'home' && <Home />}
@@ -48,7 +48,7 @@ export function App() {
           <Toast />
         </>
       )}
-      <Door locked={!pass} />
+      <Door locked={!signedIn} />
     </div>
   );
 }
@@ -58,7 +58,10 @@ export function App() {
 function Door({ locked }: { locked: boolean }) {
   // 鍵がかかっている間は閉じたまま。開いたら、開く動きのあとで片づける
   const [gone, setGone] = useState(false);
-  const [word, setWord] = useState('');
+  const [mode, setMode] = useState<'signup' | 'login'>(() => (lastName() ? 'login' : 'signup'));
+  const [name, setName] = useState(lastName);
+  const [password, setPassword] = useState('');
+  const [invite, setInvite] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -67,19 +70,25 @@ function Door({ locked }: { locked: boolean }) {
       setGone(false);
       return;
     }
-    const t = setTimeout(() => setGone(true), 1150);
+    const t = setTimeout(() => setGone(true), 900);
     return () => clearTimeout(t);
   }, [locked]);
   if (gone) return null;
 
+  const signup = mode === 'signup';
+  const ready = name.trim() && password && (!signup || invite.trim());
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!word.trim() || busy) return;
+    if (!ready || busy) return;
     setBusy(true);
     setError('');
-    const problem = await enter(word);
+    const problem = await signIn(mode, { name, password, ...(signup ? { invite } : {}) });
     setBusy(false);
     if (problem) setError(problem);
+  };
+  const switchTo = (m: 'signup' | 'login') => {
+    setMode(m);
+    setError('');
   };
 
   return (
@@ -87,22 +96,48 @@ function Door({ locked }: { locked: boolean }) {
       <div className="door-leaf">
         <span className="door-handle" />
         <div className="door-face">
-          <p className="wordmark">Refricherator</p>
-          <p className="door-tag">冷蔵庫を、リッチに使い切る。</p>
-          {locked && (
-            <form className="door-form" onSubmit={submit}>
-              <label htmlFor="pass">合言葉</label>
-              <input id="pass" className="field field-dark" value={word} onChange={(e) => setWord(e.target.value)} autoComplete="off" autoCapitalize="none" spellCheck={false} enterKeyHint="go" />
-              {error && (
-                <p className="door-error" role="alert">
-                  {error}
-                </p>
-              )}
-              <button className="btn btn-light" disabled={!word.trim() || busy}>
-                {busy ? '確かめています' : '扉を開ける'}
-              </button>
-            </form>
-          )}
+          <div className="door-inner">
+            <p className="wordmark">Refricherator</p>
+            <p className="door-tag">冷蔵庫を、リッチに使い切る。</p>
+            {locked && (
+              <form className="door-form" onSubmit={submit}>
+                <div className="door-modes" role="tablist" aria-label="入り方">
+                  <button type="button" role="tab" aria-selected={signup} className={signup ? 'on' : ''} onClick={() => switchTo('signup')}>
+                    はじめて使う
+                  </button>
+                  <button type="button" role="tab" aria-selected={!signup} className={!signup ? 'on' : ''} onClick={() => switchTo('login')}>
+                    ログイン
+                  </button>
+                </div>
+                <label htmlFor="name">名前</label>
+                <input id="name" className="field field-dark" value={name} onChange={(e) => setName(e.target.value)} autoComplete="username" autoCapitalize="none" spellCheck={false} maxLength={20} enterKeyHint="next" />
+                <label htmlFor="password">パスワード{signup && <small>8文字以上</small>}</label>
+                <input
+                  id="password"
+                  className="field field-dark"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  autoComplete={signup ? 'new-password' : 'current-password'}
+                  enterKeyHint={signup ? 'next' : 'go'}
+                />
+                {signup && (
+                  <>
+                    <label htmlFor="invite">招待コード</label>
+                    <input id="invite" className="field field-dark" value={invite} onChange={(e) => setInvite(e.target.value)} autoComplete="off" autoCapitalize="none" spellCheck={false} enterKeyHint="go" />
+                  </>
+                )}
+                {error && (
+                  <p className="door-error" role="alert">
+                    {error}
+                  </p>
+                )}
+                <button className="btn btn-light" disabled={!ready || busy}>
+                  {busy ? '確かめています' : signup ? 'はじめる' : 'ログイン'}
+                </button>
+              </form>
+            )}
+          </div>
         </div>
       </div>
     </div>
@@ -281,6 +316,8 @@ function Settings() {
   const settings = useStore((s) => s.settings);
   const usage = useStore((s) => s.usage);
   const limits = useStore((s) => s.limits);
+  const name = useStore((s) => s.session?.name ?? '');
+  const [deleting, setDeleting] = useState(false);
   const [dislikes, setDislikes] = useState(settings.dislikes);
   useEffect(() => setDislikes(settings.dislikes), [settings.dislikes]);
   return (
@@ -320,11 +357,49 @@ function Settings() {
       </section>
 
       <section className="set">
-        <h2>合言葉</h2>
-        <button className="btn btn-line" onClick={leave}>
-          合言葉を入れ直す
+        <h2>アカウント</h2>
+        <p className="hint">{name}さんでログイン中</p>
+        <button className="btn btn-line" onClick={() => void leave()}>
+          ログアウト
+        </button>
+        <button className="danger-link" onClick={() => setDeleting(true)}>
+          アカウントを削除
         </button>
       </section>
+      {deleting && <DeleteSheet onClose={() => setDeleting(false)} />}
     </div>
+  );
+}
+
+function DeleteSheet({ onClose }: { onClose: () => void }) {
+  const [password, setPassword] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const run = async () => {
+    if (!password || busy) return;
+    setBusy(true);
+    setError('');
+    const problem = await deleteAccount(password);
+    setBusy(false);
+    if (problem) setError(problem);
+  };
+  return (
+    <Sheet
+      title="アカウントを削除"
+      onClose={onClose}
+      footer={
+        <button className="btn btn-danger" disabled={!password || busy} onClick={run}>
+          {busy ? '削除しています' : '削除する'}
+        </button>
+      }
+    >
+      <p className="hint">冷蔵庫の中身、これまでの提案と写真、設定がすべて消え、元に戻せません。確かめのため、パスワードを入れてください。</p>
+      <input className="field" type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" aria-label="パスワード" />
+      {error && (
+        <p className="problem" role="alert">
+          {error}
+        </p>
+      )}
+    </Sheet>
   );
 }

@@ -2,7 +2,7 @@
 // 表示の切れ・画面の切り替えの速さ・エラーを調べる。
 //   先に:npm run api / npm run dev      実行:npm run e2e [サイズ名…]
 import { fileURLToPath } from 'node:url';
-import { apiCall, apiTest, launch, openPage, OUT, SIZES, sleep } from './lib.mjs';
+import { apiTest, launch, openPage, OUT, SIZES, sleep } from './lib.mjs';
 
 const only = process.argv.slice(2);
 const sizes = Object.keys(SIZES).filter((s) => !only.length || only.includes(s));
@@ -18,9 +18,9 @@ for (const size of sizes) {
   let h;
   const expect = (cond, msg) => cond || note(msg);
 
-  // ── 合言葉の扉 ──
+  // ── 扉:はじめて使う(登録)──
   // 以前の形の合言葉入りリンクで開いても、合言葉としては使わず、アドレス欄から消す
-  h = await openPage(browser, { size, pass: null, hash: '#k=test-pass' });
+  h = await openPage(browser, { size, session: false, hash: '#k=test-pass' });
   const check = async (name) => {
     await sleep(260); // 出てくる動きが終わるのを待つ
     await h.shot(name);
@@ -36,18 +36,20 @@ for (const size of sizes) {
     if (ms > 200) note(`${label} の切り替えに ${ms}ms かかった`);
   };
 
-  await h.waitText('合言葉');
+  await h.waitText('はじめて使う');
   expect(!h.page.url().includes('k='), `アドレス欄に合言葉が残っている: ${h.page.url()}`);
-  expect((await h.text()).includes('扉を開ける'), '合言葉入りのリンクで、合言葉を聞かれずに入れてしまった');
+  expect(!!(await h.page.$('.door-locked')), '合言葉入りのリンクで、ログインせずに入れてしまった');
   await check('01-door');
-  await h.page.type('#pass', 'chigau');
-  await h.tap('扉を開ける');
-  await h.waitText('合言葉が違います');
+  await h.page.type('#name', 'はなこ');
+  await h.page.type('#password', 'hanako-pass-1');
+  await h.page.type('#invite', 'chigau');
+  await h.page.click('.door-form .btn');
+  await h.waitText('招待コードが違います');
   await check('02-door-error');
-  await h.page.evaluate(() => (document.querySelector('#pass').value = ''));
-  await h.page.click('#pass', { clickCount: 3 });
-  await h.page.type('#pass', 'test-pass');
-  await h.tap('扉を開ける');
+  await h.page.$eval('#invite', (e) => e.select()); // 入っている文字を全部選んで消す
+  await h.page.keyboard.press('Backspace');
+  await h.page.type('#invite', 'test-pass');
+  await h.page.click('.door-form .btn');
   await h.waitText('なに作る');
   await sleep(1300);
   expect(!(await h.page.$('.door')), '扉が開いたあとも残っている');
@@ -126,7 +128,7 @@ for (const size of sizes) {
   const listed = await rowsNow();
   const names = listed.map((r) => r.name);
   for (const n of ['卵', '牛乳', '納豆', 'もやし', '豚こま肉', '小松菜', 'しめじ', '絹豆腐']) expect(names.includes(n), `冷蔵庫に ${n} がない(${names.join(',')})`);
-  const server = (await apiCall('sync')).items.map((i) => i.name);
+  const server = (await h.api('sync')).items.map((i) => i.name);
   const shown = listed.reduce((t, r) => t + r.n, 0);
   expect(server.length === shown, `サーバーの数(${server.length})と画面の数(${shown})が合わない`);
 
@@ -179,7 +181,7 @@ for (const size of sizes) {
   await h.waitText('なに作る');
   await check('25-home-after-cooked');
   await sleep(900);
-  expect(!(await apiCall('sync')).items.some((i) => i.name === usedName), `${usedName} がサーバーに残っている`);
+  expect(!(await h.api('sync')).items.some((i) => i.name === usedName), `${usedName} がサーバーに残っている`);
 
   // ── もう一度同じ場面:冷蔵庫が変わったので作り直す。別の3品も試す ──
   await h.tap('つかれた日');
@@ -211,13 +213,34 @@ for (const size of sizes) {
   await h.page.$eval('input[aria-label="使わないもの"]', (e) => e.blur());
   await check('30-settings');
   await sleep(500);
-  const set = (await apiCall('sync')).settings;
+  const set = (await h.api('sync')).settings;
   expect(set.servings === 2 && set.dislikes === 'パクチー', `設定が保存されていない ${JSON.stringify(set)}`);
 
   // ── 開き直しても、合言葉なしですぐ使える(中身は手元に残っている)──
   await h.page.reload({ waitUntil: 'domcontentloaded' });
   await h.waitText('何人分', 3000);
-  expect(!(await h.text()).includes('扉を開ける'), '開き直したら合言葉を聞かれた');
+  expect(!(await h.page.$('.door-locked')), '開き直したらログインを聞かれた');
+
+  // ── ログアウトして、ログインし直す(中身はサーバーに残っている)──
+  const before2 = (await h.api('sync')).items.length;
+  await h.tap('ログアウト');
+  await h.page.waitForSelector('.door-locked', { timeout: 8000 });
+  await h.waitText('ログイン');
+  expect((await h.page.$eval('#name', (e) => e.value)) === 'はなこ', 'ログアウト後に名前が入っていない');
+  expect(!(await h.page.$('#invite')), 'ログアウト後なのに、登録の画面になっている');
+  await check('31a-door-login');
+  await h.page.type('#password', 'まちがい-pass');
+  await h.page.click('.door-form .btn');
+  await h.waitText('名前かパスワードが違います');
+  await h.page.$eval('#password', (e) => e.select()); // 入っている文字を全部選んで消す
+  await h.page.keyboard.press('Backspace');
+  await h.page.type('#password', 'hanako-pass-1');
+  await h.page.click('.door-form .btn');
+  await h.waitText('何人分');
+  await sleep(1200);
+  expect(!(await h.page.$('.door')), 'ログインしたのに扉が残っている');
+  const after2 = (await h.api('sync')).items.length;
+  expect(before2 > 0 && before2 === after2, `ログインし直したら食材の数が変わった(${before2}→${after2})`);
 
   // ── うまくいかないとき ──
   await apiTest({ fail: true, delay: 200 });

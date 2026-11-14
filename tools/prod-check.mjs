@@ -1,54 +1,73 @@
-// 公開した中継サーバーに、本物の Gemini で通しの確認をする。
-//   node tools/prod-check.mjs           通信・合言葉・AI のキーの確認だけ(お金はかからない)
-//   node tools/prod-check.mjs setup     手元の GEMINI_API_KEY を中継サーバーに登録する(1回だけ)
-//   node tools/prod-check.mjs full      読み取り・提案・写真1枚・買い物まで動かす(数円かかる)
+// 公開した中継サーバーを確かめる。確認用の一時アカウントを作り、最後に消す。
+//   node tools/prod-check.mjs        登録・ログイン・人ごとの分離・削除まで(お金はかからない)
+//   node tools/prod-check.mjs full   読み取り・提案・写真1枚・買い物も(数円かかる)
 import { readFileSync } from 'node:fs';
 const URL_ = 'https://vphcejuxczbttkuzqnlv.supabase.co/functions/v1/api';
-const pass = readFileSync(new URL('../.env.local', import.meta.url), 'utf8').match(/REFRICHERATOR_PASSCODE=(.+)/)[1].trim();
-const mode = process.argv[2] ?? 'ping';
-const call = async (action, body = {}, p = pass) => {
+const invite = readFileSync(new URL('../.env.local', import.meta.url), 'utf8').match(/REFRICHERATOR_INVITE=(.+)/)[1].trim();
+const full = process.argv[2] === 'full';
+const call = async (action, body = {}, token = '') => {
   const t = Date.now();
-  const r = await fetch(URL_, { method: 'POST', headers: { 'content-type': 'application/json', 'x-passcode': p }, body: JSON.stringify({ action, ...body }) });
+  const r = await fetch(URL_, { method: 'POST', headers: { 'content-type': 'application/json', 'x-session': token }, body: JSON.stringify({ action, ...body }) });
   const j = await r.json().catch(() => ({}));
   console.log(`${action} → ${r.status} ${Date.now() - t}ms`);
   return { status: r.status, j };
 };
-const ok = (cond, msg) => { if (!cond) { console.error('NG: ' + msg); process.exitCode = 1; } else console.log('  ok: ' + msg); };
+const ok = (cond, msg) => {
+  if (!cond) {
+    console.error('NG: ' + msg);
+    process.exitCode = 1;
+  } else console.log('  ok: ' + msg);
+};
+const tag = Math.random().toString(36).slice(2, 8);
+const A = { name: `確認用A-${tag}`, password: `check-${tag}-a1` };
+const B = { name: `確認用B-${tag}`, password: `check-${tag}-b1` };
 
-let r = await call('ping', {}, 'wrong-pass');
-ok(r.status === 401, '合言葉が違うと入れない');
-r = await call('ping', {}, '');
-ok(r.status === 401, '合言葉なしでは入れない');
-r = await call('ping');
-ok(r.status === 200, '正しい合言葉で入れる');
-console.log('  AI のキー:', r.j.ai ? '登録済み' : '未登録');
+let r = await call('ping');
+ok(r.status === 200, `ping(接続元: ${r.j.from})`);
+r = await call('sync');
+ok(r.status === 401 && r.j.error?.code === 'session', 'ログインしていないと使えない');
+r = await call('signup', { ...A, invite: 'ちがう招待コード' });
+ok(r.status === 401 && r.j.error?.code === 'invite', '招待コードが違うと登録できない');
+r = await call('signup', { ...A, invite });
+ok(r.status === 200 && r.j.token, `${A.name} を登録した`);
+let ta = r.j.token;
+r = await call('signup', { ...B, invite });
+const tb = r.j.token;
+ok(r.status === 200 && tb, `${B.name} を登録した`);
+r = await call('signup', { ...A, invite });
+ok(r.status === 409, '同じ名前では登録できない');
 
-if (mode === 'setup') {
-  const key = process.env.GEMINI_API_KEY;
-  if (!key) throw new Error('GEMINI_API_KEY が環境にありません');
-  r = await call('setup', { geminiKey: key });
-  ok(r.status === 200, 'キーを登録した');
-  r = await call('ping');
-  ok(r.j.ai === true, 'キーが登録済みになった');
-}
+r = await call('add', { items: [{ name: '卵', category: '卵・乳製品', days: 14 }] }, ta);
+ok(r.j.items?.length === 1, 'A の冷蔵庫に卵を入れた');
+r = await call('sync', {}, tb);
+ok(r.j.items?.length === 0, 'B の冷蔵庫には出てこない');
+await call('remove', { ids: [(await call('sync', {}, ta)).j.items[0].id] }, tb);
+ok((await call('sync', {}, ta)).j.items.length === 1, 'B は A の卵を消せない');
 
-if (mode === 'full') {
-  r = await call('sync');
-  ok(r.status === 200 && Array.isArray(r.j.items), `sync(食材 ${r.j.items?.length} 品、写真 ${r.j.usage?.images} 枚)`);
-  r = await call('parse', { text: '豚こまと小松菜と卵を買った' });
-  ok(r.j.items?.length === 3, '文章から3品を読み取る: ' + r.j.items?.map((i) => `${i.name}(${i.days}日)`).join(' '));
-  const ids = r.j.items.map(() => crypto.randomUUID());
-  r = await call('add', { items: r.j.items.map((i, n) => ({ ...i, id: ids[n] })) });
-  ok(ids.every((id) => r.j.items.some((i) => i.id === id)), '3品を足した');
-  r = await call('suggest', { scene: 'tired' });
+await call('logout', {}, ta);
+ok((await call('sync', {}, ta)).status === 401, 'ログアウトしたトークンは使えない');
+r = await call('login', { name: A.name, password: 'ちがうパスワード' });
+ok(r.status === 401, 'パスワードが違うとログインできない');
+r = await call('login', A);
+ta = r.j.token;
+ok(r.status === 200 && (await call('sync', {}, ta)).j.items.length === 1, 'ログインし直すと、卵が残っている');
+
+if (full) {
+  r = await call('parse', { text: '豚こまと小松菜を買った' }, ta);
+  ok(r.j.items?.length === 2, '文章から読み取る: ' + r.j.items?.map((i) => i.name).join(' '));
+  await call('add', { items: r.j.items }, ta);
+  r = await call('suggest', { scene: 'tired' }, ta);
   ok(r.j.recipes?.length === 3, '3品の提案: ' + r.j.recipes?.map((x) => x.title).join(' / '));
   const rec = r.j.recipes[0];
-  r = await call('image', { id: rec.id });
-  ok(/^https:\/\/.+\/dishes\//.test(r.j.url ?? ''), '写真を作って保存した: ' + r.j.url);
-  const img = await fetch(r.j.url);
-  ok(img.ok && img.headers.get('content-type')?.startsWith('image/'), `写真をだれでも表示できる(${img.headers.get('content-type')}, ${Math.round(Number(img.headers.get('content-length')) / 1024)}KB)`);
-  r = await call('shopping');
+  r = await call('image', { id: rec.id }, ta);
+  ok(/^https:\/\/.+\/dishes\//.test(r.j.url ?? ''), '写真を作った');
+  ok((await call('image', { id: rec.id }, tb)).status === 404, 'B は A のレシピの写真を作れない');
+  r = await call('shopping', {}, ta);
   ok(r.j.ideas?.length >= 3, '買い物の案: ' + r.j.ideas?.map((i) => `${i.buy}→${i.dish}`).join(' / '));
-  r = await call('cooked', { id: rec.id, usedUp: ids });
-  ok(!r.j.items.some((i) => ids.includes(i.id)), '作った → 足した3品を冷蔵庫から出した');
 }
+
+r = await call('delete_account', { password: A.password }, ta);
+ok(r.status === 200, `${A.name} を削除した`);
+r = await call('delete_account', { password: B.password }, tb);
+ok(r.status === 200, `${B.name} を削除した`);
+ok((await call('login', A)).status === 401, '削除したアカウントではログインできない');

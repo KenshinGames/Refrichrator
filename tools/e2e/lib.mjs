@@ -13,17 +13,22 @@ export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 export async function apiTest(body) {
   await fetch(API + '/__test', { method: 'POST', body: JSON.stringify(body) });
 }
-export async function apiCall(action, body = {}) {
-  const r = await fetch(API + '/functions/v1/api', { method: 'POST', headers: { 'content-type': 'application/json', 'x-passcode': 'test-pass' }, body: JSON.stringify({ action, ...body }) });
+export async function apiCall(action, body = {}, token = '') {
+  const r = await fetch(API + '/functions/v1/api', { method: 'POST', headers: { 'content-type': 'application/json', 'x-session': token }, body: JSON.stringify({ action, ...body }) });
   return r.json();
+}
+/** 手元のサーバーに最初からある「テスト」アカウントでログインする */
+export async function testSession() {
+  const r = await apiCall('login', { name: 'テスト', password: 'test-pass-123' });
+  return { token: r.token, name: r.name };
 }
 
 export async function launch() {
   return puppeteer.launch({ executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', headless: true, args: ['--hide-scrollbars'] });
 }
 
-/** 新しいページ(スマホの大きさ・タッチ)。pass を渡すと合言葉入りのリンクで開く */
-export async function openPage(browser, { size = 'iphone', pass = 'test-pass', path = '', hash = '' } = {}) {
+/** 新しいページ(スマホの大きさ・タッチ)。session: true なら「テスト」でログインした状態から始める */
+export async function openPage(browser, { size = 'iphone', session = true, path = '', hash = '' } = {}) {
   const [width, height] = SIZES[size];
   // サイズごとに、まっさらな状態(保存したものが残っていない)で開く
   const context = await browser.createBrowserContext();
@@ -35,14 +40,19 @@ export async function openPage(browser, { size = 'iphone', pass = 'test-pass', p
   const errors = [];
   page.on('pageerror', (e) => errors.push(String(e)));
   page.on('console', (m) => m.type() === 'error' && !/Failed to load resource/.test(m.text()) && errors.push(m.text()));
-  // 合言葉を入れ終えた端末の状態から始める(扉で入れる流れは run.mjs の最初で確かめる)
-  if (pass) await page.evaluateOnNewDocument((p) => { if (!localStorage.getItem('refricherator:v1')) localStorage.setItem('refricherator:v1', JSON.stringify({ pass: p })); }, pass);
+  // ログイン済みの端末の状態から始める(扉で登録する流れは run.mjs の最初で確かめる)
+  if (session) {
+    const ses = await testSession();
+    await page.evaluateOnNewDocument((v) => { if (!localStorage.getItem('refricherator:v1')) localStorage.setItem('refricherator:v1', JSON.stringify({ session: v })); }, ses);
+  }
   await page.goto(BASE + hash, { waitUntil: 'networkidle0' });
   if (path) await page.evaluate((p) => { location.hash = p; window.dispatchEvent(new PopStateEvent('popstate')); }, path);
   const h = {
     page,
     errors,
     size,
+    /** このページでログインしている人として、サーバーを呼ぶ */
+    api: async (action, body = {}) => apiCall(action, body, await page.evaluate(() => JSON.parse(localStorage.getItem('refricherator:v1') ?? '{}').session?.token ?? '')),
     shot: (name) => page.screenshot({ path: `${OUT}${name}-${size}${dark ? '-dark' : ''}.png` }),
     /** 見えている文字で押す(ボタン・リンク) */
     async tap(text, { exact = false } = {}) {

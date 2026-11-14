@@ -79,8 +79,12 @@ export interface Store {
   getRecipe(id: string): Promise<Recipe | null>;
   updateRecipe(id: string, patch: { imageUrl?: string; cookedAt?: string }): Promise<void>;
   recentRecipes(limit: number): Promise<Recipe[]>;
-  /** その時刻より後に作ったレシピのうち、写真があるものの数 */
+  /** その時刻より後に作ったレシピのうち、写真があるものの数(この人の分) */
   countImages(sinceIso: string): Promise<number>;
+  /** 同じく、全員の分 */
+  countAllImages(sinceIso: string): Promise<number>;
+  /** この人の食材・レシピ・写真・設定をすべて消す */
+  wipe(): Promise<void>;
   uploadImage(path: string, bytes: Uint8Array, mime: string): Promise<string>;
   /**
    * 合言葉の試行を1回記録し、止めている最中なら true を返す(ほかの試行と同時に走っても数えもれしないこと)。
@@ -96,10 +100,11 @@ export interface AI {
 }
 
 export interface Limits {
-  images: number; // 1か月に作る写真の上限
-  texts: number; // 1か月の文章の上限
+  images: number; // 1人が1か月に作れる写真の上限
+  allImages: number; // 全員の合計の上限(人が増えても、請求がここで止まる)
+  texts: number; // 1人の1か月の文章の上限
 }
-export const DEFAULT_LIMITS: Limits = { images: 180, texts: 1500 };
+export const DEFAULT_LIMITS: Limits = { images: 60, allImages: 180, texts: 600 };
 export const DEFAULT_SETTINGS: Settings = { servings: 1, dislikes: '' };
 
 export interface Deps {
@@ -260,8 +265,19 @@ export async function passOk(given: string | null, storedHash: string | null): P
   return diff === 0;
 }
 
-/** 同じ接続元から、何回まちがえたら何分止めるか */
-export const LOCK = { tries: 5, minutes: 15 };
+/** 同じ接続元から何回、全体で何回まちがえたら、何分止めるか */
+export const LOCK = { tries: 5, all: 30, minutes: 15 };
+
+/**
+ * 1回の試行を記録して、止めている最中なら true を返す。
+ * 接続元ごとの回数に加えて、全体の回数でも止める(接続元を名乗り替えて回数制限をすり抜けられないように)。
+ */
+export async function limit(store: Pick<Store, 'attempt'>, from: string, wrong: boolean, now: Date = new Date()): Promise<boolean> {
+  const key = (await sha256('from:' + from)).slice(0, 32); // IP アドレスそのものは残さない
+  const one = await store.attempt(key, wrong, LOCK.tries, LOCK.minutes * 60, now);
+  const all = await store.attempt('all', wrong, LOCK.all, LOCK.minutes * 60, now);
+  return one || all;
+}
 
 /**
  * 合言葉を確かめる。
@@ -278,11 +294,10 @@ export async function gate(
 ): Promise<'ok' | 'wrong' | 'locked'> {
   if (!given) return 'wrong';
   const ok = await passOk(given, storedHash);
-  const key = (await sha256('from:' + from)).slice(0, 32); // IP アドレスそのものは残さない
-  if (await store.attempt(key, !ok, LOCK.tries, LOCK.minutes * 60, now)) return 'locked';
+  if (await limit(store, from, !ok, now)) return 'locked';
   return ok ? 'ok' : 'wrong';
 }
-export const LOCKED_MESSAGE = `合言葉を${LOCK.tries}回まちがえたため、しばらく受け付けません。${LOCK.minutes}分ほどたってからお試しください。`;
+export const LOCKED_MESSAGE = `何度もまちがえたため、しばらく受け付けません。${LOCK.minutes}分ほどたってからお試しください。`;
 
 // ───────── 本体 ─────────
 
@@ -397,6 +412,8 @@ export async function handle(action: string, body: Record<string, unknown>, d: D
       if (recipe.imageUrl) return { url: recipe.imageUrl };
       const u = await usage(d);
       if (u.value.images >= limits.images) return { capped: true };
+      const month = todayJst(d.now?.()).slice(0, 7);
+      if ((await store.countAllImages(`${month}-01T00:00:00+09:00`)) >= limits.allImages) return { capped: true };
       const img = await ai.image(prompts.image(recipe));
       const ext = img.mime.includes('png') ? 'png' : 'jpg';
       const url = await store.uploadImage(`${recipe.id}.${ext}`, img.bytes, img.mime);
