@@ -6,6 +6,7 @@ export function makeMemoryStore(): Store & { dump(): { items: (Item & { gone?: b
   const items: (Item & { gone?: boolean })[] = [];
   const recipes: Recipe[] = [];
   const kv = new Map<string, unknown>();
+  const gates = new Map<string, { count: number; since: number }>();
   let seq = 0;
   const id = () => `00000000-0000-4000-8000-${String(++seq).padStart(12, '0')}`;
   return {
@@ -47,6 +48,16 @@ export function makeMemoryStore(): Store & { dump(): { items: (Item & { gone?: b
     },
     async recentRecipes(limit) {
       return recipes.slice(-limit).reverse().map((r) => ({ ...r }));
+    },
+    async attempt(key, wrong, tries, windowSeconds, now) {
+      // 読んでから書くまでに await をはさまないので、同時に呼ばれても数えもれしない
+      const t = now.getTime();
+      const r = gates.get(key) ?? { count: 0, since: t };
+      const live = r.count > 0 && t - r.since < windowSeconds * 1000;
+      if (live && r.count >= tries) return true;
+      if (wrong) gates.set(key, live ? { count: r.count + 1, since: r.since } : { count: 1, since: t });
+      else gates.set(key, { count: 0, since: t });
+      return false;
     },
     async countImages(sinceIso) {
       return recipes.filter((r) => r.imageUrl && r.createdAt >= new Date(sinceIso).toISOString()).length;

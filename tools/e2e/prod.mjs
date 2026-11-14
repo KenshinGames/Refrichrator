@@ -17,8 +17,10 @@ const tap = (t) => page.evaluate((x) => { const els = [...document.querySelector
 const shot = (n) => page.screenshot({ path: `${OUT}prod-${n}.png` });
 const time = async (label, fn) => { const t = Date.now(); await fn(); console.log(`${label}: ${Date.now() - t}ms`); };
 
-await time('合言葉入りのリンクで開く → ホーム', async () => { await page.goto(`${BASE}#k=${pass}`, { waitUntil: 'domcontentloaded' }); await has('なに作る'); });
-console.log('URL から合言葉が消えている:', !page.url().includes(pass));
+await page.goto(BASE, { waitUntil: 'domcontentloaded' });
+await has('扉を開ける');
+await page.type('#pass', pass);
+await time('合言葉を入れる → ホーム', async () => { await tap('扉を開ける'); await has('なに作る'); });
 await sleep(1300);
 await tap('冷蔵庫');
 await tap('話す・打つ');

@@ -2,7 +2,7 @@
 //   node tools/dev-api.ts          にせものの AI(お金はかからない)
 //   node tools/dev-api.ts --real   本物の Gemini(GEMINI_API_KEY を使う)
 import { createServer } from 'node:http';
-import { AppError, handle, passOk, sha256 } from '../supabase/functions/api/core.ts';
+import { AppError, gate, handle, LOCKED_MESSAGE, sha256 } from '../supabase/functions/api/core.ts';
 import { makeGemini, prompts } from '../supabase/functions/api/gemini.ts';
 import { makeFakeAI, makeMemoryStore } from './memory.ts';
 
@@ -39,9 +39,9 @@ createServer(async (req, res) => {
     return send(200, { ok: true });
   }
   try {
-    if (!(await passOk(String(req.headers['x-passcode'] ?? ''), passHash))) {
-      return send(401, { error: { code: 'passcode', message: '合言葉が違います。' } });
-    }
+    const pass = await gate(store, req.socket.remoteAddress ?? 'local', String(req.headers['x-passcode'] ?? ''), passHash);
+    if (pass === 'locked') return send(429, { error: { code: 'locked', message: LOCKED_MESSAGE } });
+    if (pass === 'wrong') return send(401, { error: { code: 'passcode', message: '合言葉が違います。' } });
     if (body.action === 'ping') return send(200, { ok: true, ai: true });
     send(200, await handle(body.action, body, { store, ai, prompts }));
   } catch (e) {

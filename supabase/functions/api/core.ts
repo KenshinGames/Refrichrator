@@ -82,6 +82,11 @@ export interface Store {
   /** その時刻より後に作ったレシピのうち、写真があるものの数 */
   countImages(sinceIso: string): Promise<number>;
   uploadImage(path: string, bytes: Uint8Array, mime: string): Promise<string>;
+  /**
+   * 合言葉の試行を1回記録し、止めている最中なら true を返す(ほかの試行と同時に走っても数えもれしないこと)。
+   * wrong = true でまちがえた回数を1増やし、false で0に戻す。
+   */
+  attempt(key: string, wrong: boolean, tries: number, windowSeconds: number, now: Date): Promise<boolean>;
 }
 
 export type Part = { text: string } | { inlineData: { mimeType: string; data: string } };
@@ -254,6 +259,30 @@ export async function passOk(given: string | null, storedHash: string | null): P
   for (let i = 0; i < h.length; i++) diff |= h.charCodeAt(i) ^ (storedHash.charCodeAt(i) || 0);
   return diff === 0;
 }
+
+/** 同じ接続元から、何回まちがえたら何分止めるか */
+export const LOCK = { tries: 5, minutes: 15 };
+
+/**
+ * 合言葉を確かめる。
+ * - 同じ接続元から LOCK.tries 回まちがえたら、LOCK.minutes 分は合っていても通さない
+ *   (止めている間に当て推量を続けられないようにするため)
+ * - 何も入れていないものは数えない
+ */
+export async function gate(
+  store: Pick<Store, 'attempt'>,
+  from: string,
+  given: string | null,
+  storedHash: string | null,
+  now: Date = new Date(),
+): Promise<'ok' | 'wrong' | 'locked'> {
+  if (!given) return 'wrong';
+  const ok = await passOk(given, storedHash);
+  const key = (await sha256('from:' + from)).slice(0, 32); // IP アドレスそのものは残さない
+  if (await store.attempt(key, !ok, LOCK.tries, LOCK.minutes * 60, now)) return 'locked';
+  return ok ? 'ok' : 'wrong';
+}
+export const LOCKED_MESSAGE = `合言葉を${LOCK.tries}回まちがえたため、しばらく受け付けません。${LOCK.minutes}分ほどたってからお試しください。`;
 
 // ───────── 本体 ─────────
 

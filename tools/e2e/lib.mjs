@@ -23,7 +23,7 @@ export async function launch() {
 }
 
 /** 新しいページ(スマホの大きさ・タッチ)。pass を渡すと合言葉入りのリンクで開く */
-export async function openPage(browser, { size = 'iphone', pass = 'test-pass', path = '' } = {}) {
+export async function openPage(browser, { size = 'iphone', pass = 'test-pass', path = '', hash = '' } = {}) {
   const [width, height] = SIZES[size];
   // サイズごとに、まっさらな状態(保存したものが残っていない)で開く
   const context = await browser.createBrowserContext();
@@ -35,7 +35,9 @@ export async function openPage(browser, { size = 'iphone', pass = 'test-pass', p
   const errors = [];
   page.on('pageerror', (e) => errors.push(String(e)));
   page.on('console', (m) => m.type() === 'error' && !/Failed to load resource/.test(m.text()) && errors.push(m.text()));
-  await page.goto(BASE + (pass ? `#k=${pass}` : '') , { waitUntil: 'networkidle0' });
+  // 合言葉を入れ終えた端末の状態から始める(扉で入れる流れは run.mjs の最初で確かめる)
+  if (pass) await page.evaluateOnNewDocument((p) => { if (!localStorage.getItem('refricherator:v1')) localStorage.setItem('refricherator:v1', JSON.stringify({ pass: p })); }, pass);
+  await page.goto(BASE + hash, { waitUntil: 'networkidle0' });
   if (path) await page.evaluate((p) => { location.hash = p; window.dispatchEvent(new PopStateEvent('popstate')); }, path);
   const h = {
     page,

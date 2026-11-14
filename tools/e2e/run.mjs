@@ -19,7 +19,8 @@ for (const size of sizes) {
   const expect = (cond, msg) => cond || note(msg);
 
   // ── 合言葉の扉 ──
-  h = await openPage(browser, { size, pass: null });
+  // 以前の形の合言葉入りリンクで開いても、合言葉としては使わず、アドレス欄から消す
+  h = await openPage(browser, { size, pass: null, hash: '#k=test-pass' });
   const check = async (name) => {
     await sleep(260); // 出てくる動きが終わるのを待つ
     await h.shot(name);
@@ -36,6 +37,8 @@ for (const size of sizes) {
   };
 
   await h.waitText('合言葉');
+  expect(!h.page.url().includes('k='), `アドレス欄に合言葉が残っている: ${h.page.url()}`);
+  expect((await h.text()).includes('扉を開ける'), '合言葉入りのリンクで、合言葉を聞かれずに入れてしまった');
   await check('01-door');
   await h.page.type('#pass', 'chigau');
   await h.tap('扉を開ける');

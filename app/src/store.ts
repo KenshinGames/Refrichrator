@@ -201,14 +201,9 @@ interface SyncResult {
 
 export function boot(): void {
   loadCache();
-  // 合言葉入りのリンク(…/#k=合言葉)で開いたら、そのまま使えるようにする
-  const m = location.hash.match(/[#&]k=([^&]+)/) ?? location.search.match(/[?&]k=([^&]+)/);
-  if (m) {
-    state = { ...state, pass: decodeURIComponent(m[1]) };
-    // 合言葉は読んだらすぐ URL から消す(サーバーや履歴に残さない)
-    history.replaceState(null, '', location.pathname);
-    schedulePersist();
-  }
+  // 合言葉は URL からは受け取らない(リンクを送ると、トークの履歴などから見えてしまうため)。
+  // 以前の形のリンク(…#k=合言葉)で開かれたときは、使わずにアドレス欄から消すだけにする。
+  if (/[#&?]k=/.test(location.hash + location.search)) history.replaceState(null, '', location.pathname);
   if (state.pass) void sync();
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible' && state.pass) void sync();

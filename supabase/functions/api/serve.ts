@@ -1,6 +1,6 @@
 // 中継サーバーの入口の中身。合言葉を確かめ、保存先(Postgres・Storage)と Gemini を core につなぐ。
 import { createClient } from 'npm:@supabase/supabase-js@2';
-import { AppError, handle, passOk } from './core.ts';
+import { AppError, gate, handle, LOCKED_MESSAGE } from './core.ts';
 import type { Item, NewRecipe, Recipe, Store } from './core.ts';
 import { makeGemini, prompts } from './gemini.ts';
 
@@ -90,6 +90,14 @@ const store: Store = {
     }
     return res.count ?? 0;
   },
+  async attempt(key, wrong, tries, windowSeconds) {
+    const res = await sb.rpc('gate_attempt', { p_key: key, p_wrong: wrong, p_tries: tries, p_window_seconds: windowSeconds });
+    if (res.error) {
+      console.error('gate error', res.error.message);
+      throw new AppError('db', '保存先とのやりとりに失敗しました。もう一度お試しください。', 500);
+    }
+    return res.data === true;
+  },
   async uploadImage(path, bytes, mime) {
     const up = await sb.storage.from('dishes').upload(path, bytes, { contentType: mime, upsert: true, cacheControl: '31536000' });
     if (up.error) {
@@ -99,6 +107,12 @@ const store: Store = {
     return sb.storage.from('dishes').getPublicUrl(path).data.publicUrl;
   },
 };
+
+/** 接続元の IP アドレス(Supabase の前段が付ける見出しから取る) */
+function clientIp(req: Request): string {
+  const h = req.headers;
+  return (h.get('cf-connecting-ip') ?? h.get('x-forwarded-for')?.split(',')[0] ?? h.get('x-real-ip') ?? 'unknown').trim();
+}
 
 // 秘密の値は少しの間だけ覚えておく(毎回データベースを読まない)
 let cache: { at: number; passHash: string | null; geminiKey: string | null } | null = null;
@@ -114,8 +128,11 @@ Deno.serve(async (req) => {
   if (req.method !== 'POST') return json({ error: { code: 'method', message: 'POST だけ受け付けます。' } }, 405);
   try {
     const sec = await secrets();
-    if (!(await passOk(req.headers.get('x-passcode'), sec.passHash))) {
-      await new Promise((r) => setTimeout(r, 400)); // 総当たりを遅くする
+    const from = clientIp(req);
+    const pass = await gate(store, from, req.headers.get('x-passcode'), sec.passHash);
+    if (pass === 'locked') return json({ error: { code: 'locked', message: LOCKED_MESSAGE } }, 429);
+    if (pass === 'wrong') {
+      await new Promise((r) => setTimeout(r, 400));
       return json({ error: { code: 'passcode', message: '合言葉が違います。' } }, 401);
     }
     const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
@@ -129,7 +146,8 @@ Deno.serve(async (req) => {
       cache = null;
       return json({ ok: true });
     }
-    if (action === 'ping') return json({ ok: true, ai: !!sec.geminiKey });
+    // from は、呼んだ本人に自分の接続元がどう見えているかを返す(当て推量を止める仕組みの確認用)
+    if (action === 'ping') return json({ ok: true, ai: !!sec.geminiKey, from });
 
     if (!sec.geminiKey) return json({ error: { code: 'setup', message: 'AI のキーがまだ登録されていません。' } }, 503);
     const ai = makeGemini({ key: sec.geminiKey, textModel: Deno.env.get('TEXT_MODEL'), imageModel: Deno.env.get('IMAGE_MODEL') });

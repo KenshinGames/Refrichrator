@@ -8,6 +8,8 @@ import {
   handle,
   normName,
   passOk,
+  gate,
+  LOCK,
   sha256,
   todayJst,
 } from '../supabase/functions/api/core.ts';
@@ -111,6 +113,36 @@ describe('合言葉', () => {
     expect(await passOk('', hash)).toBe(false);
     expect(await passOk(null, hash)).toBe(false);
     expect(await passOk('hiraku-goma', null)).toBe(false);
+  });
+});
+
+describe('当て推量を止める', () => {
+  const at = (min: number) => new Date(NOW.getTime() + min * 60_000);
+  it(`${LOCK.tries}回まちがえたら、${LOCK.minutes}分は合っていても通さない。時間がたてば戻る`, async () => {
+    const store = makeMemoryStore();
+    const hash = await sha256('KenshinApps');
+    for (let i = 0; i < LOCK.tries; i++) expect(await gate(store, '1.1.1.1', 'guess' + i, hash, at(0))).toBe('wrong');
+    expect(await gate(store, '1.1.1.1', 'KenshinApps', hash, at(1))).toBe('locked');
+    expect(await gate(store, '1.1.1.1', 'guess-x', hash, at(1))).toBe('locked');
+    // ほかの接続元は止めない
+    expect(await gate(store, '2.2.2.2', 'KenshinApps', hash, at(1))).toBe('ok');
+    expect(await gate(store, '1.1.1.1', 'KenshinApps', hash, at(LOCK.minutes + 1))).toBe('ok');
+  });
+  it('合っていたら数え直す。何も入れていないものは数えない', async () => {
+    const store = makeMemoryStore();
+    const hash = await sha256('KenshinApps');
+    for (let i = 0; i < LOCK.tries - 1; i++) await gate(store, 'a', 'guess' + i, hash, at(0));
+    expect(await gate(store, 'a', 'KenshinApps', hash, at(0))).toBe('ok');
+    for (let i = 0; i < LOCK.tries - 1; i++) expect(await gate(store, 'a', 'guess' + i, hash, at(1))).toBe('wrong');
+    for (let i = 0; i < 20; i++) expect(await gate(store, 'a', '', hash, at(1))).toBe('wrong');
+    expect(await gate(store, 'a', 'KenshinApps', hash, at(1))).toBe('ok');
+  });
+  it('同時にたくさん送られても、試せるのは決まった回数だけ', async () => {
+    const store = makeMemoryStore();
+    const hash = await sha256('KenshinApps');
+    const results = await Promise.all(Array.from({ length: 30 }, (_, i) => gate(store, 'b', 'guess' + i, hash, at(0))));
+    expect(results.filter((r) => r === 'wrong')).toHaveLength(LOCK.tries);
+    expect(results.filter((r) => r === 'locked')).toHaveLength(30 - LOCK.tries);
   });
 });
 
