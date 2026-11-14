@@ -18,11 +18,9 @@ create index sessions_user_idx on public.sessions (user_id);
 
 alter table public.items add column user_id uuid references public.users (id) on delete cascade;
 alter table public.recipes add column user_id uuid references public.users (id) on delete cascade;
-drop index if exists public.items_have_idx;
-create index items_have_idx on public.items (user_id, expires_on) where gone_at is null;
-drop index if exists public.recipes_created_idx;
+-- 索引は足すだけ(今ある索引は消さない)
+create index items_user_have_idx on public.items (user_id, expires_on) where gone_at is null;
 create index recipes_user_created_idx on public.recipes (user_id, created_at desc);
-create index recipes_created_idx on public.recipes (created_at);
 
 alter table public.users enable row level security;
 alter table public.sessions enable row level security;

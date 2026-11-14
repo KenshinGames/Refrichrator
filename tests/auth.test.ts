@@ -62,6 +62,24 @@ describe('登録とログイン', () => {
     for (let i = 0; i < LOCK.all; i++) await login({ name: 'taro', password: 'x' }, { ...auth, from: `10.1.0.${i}` }).catch(() => {});
     await expect(login({ name: 'taro', password: 'taro-pass-1' }, { ...auth, from: '10.9.9.9' })).rejects.toMatchObject({ code: 'locked' });
   });
+  it('自分のアカウントで正しくログインしても、ほかの人への当て推量の回数は消えない', async () => {
+    const { auth } = await setup();
+    await signup({ name: 'Taro', password: 'taro-pass-1', invite: 'KenshinApps' }, auth);
+    await signup({ name: 'Mallory', password: 'mallory-pass', invite: 'KenshinApps' }, { ...auth, from: '10.5.5.5' });
+    for (let round = 0; round < 3; round++) {
+      for (let i = 0; i < 2; i++) await login({ name: 'taro', password: `guess-${round}-${i}` }, auth).catch(() => {});
+      await login({ name: 'mallory', password: 'mallory-pass' }, auth).catch(() => {}); // 自分で正しくログイン
+    }
+    await expect(login({ name: 'taro', password: 'taro-pass-1' }, auth)).rejects.toMatchObject({ code: 'locked' });
+  });
+  it(`接続元を変えても、同じアカウントに${LOCK.account}回まちがえたら止める。ほかのアカウントは止めない`, async () => {
+    const { auth } = await setup();
+    await signup({ name: 'Taro', password: 'taro-pass-1', invite: 'KenshinApps' }, auth);
+    await signup({ name: 'Hana', password: 'hana-pass-1', invite: 'KenshinApps' }, { ...auth, from: '10.6.6.6' });
+    for (let i = 0; i < LOCK.account; i++) await login({ name: 'taro', password: 'x' }, { ...auth, from: `10.2.0.${i}` }).catch(() => {});
+    await expect(login({ name: 'taro', password: 'taro-pass-1' }, { ...auth, from: '10.3.3.3' })).rejects.toMatchObject({ code: 'locked' });
+    expect(await login({ name: 'hana', password: 'hana-pass-1' }, { ...auth, from: '10.4.4.4' })).toHaveProperty('token');
+  });
   it('ログアウトすると、その端末のトークンは使えなくなる', async () => {
     const { auth, db } = await setup();
     const r = await signup({ name: 'Taro', password: 'taro-pass-1', invite: 'KenshinApps' }, auth);

@@ -88,7 +88,7 @@ export interface Store {
   uploadImage(path: string, bytes: Uint8Array, mime: string): Promise<string>;
   /**
    * 合言葉の試行を1回記録し、止めている最中なら true を返す(ほかの試行と同時に走っても数えもれしないこと)。
-   * wrong = true でまちがえた回数を1増やし、false で0に戻す。
+   * wrong = true でまちがえた回数を1増やす。false では何も変えない(正しく入れても回数は戻さず、時間で戻る)。
    */
   attempt(key: string, wrong: boolean, tries: number, windowSeconds: number, now: Date): Promise<boolean>;
 }
@@ -265,18 +265,22 @@ export async function passOk(given: string | null, storedHash: string | null): P
   return diff === 0;
 }
 
-/** 同じ接続元から何回、全体で何回まちがえたら、何分止めるか */
-export const LOCK = { tries: 5, all: 30, minutes: 15 };
+/** 同じ接続元から何回、同じアカウントに何回、全体で何回まちがえたら、何分止めるか */
+export const LOCK = { tries: 5, account: 10, all: 30, minutes: 15 };
 
 /**
  * 1回の試行を記録して、止めている最中なら true を返す。
  * 接続元ごとの回数に加えて、全体の回数でも止める(接続元を名乗り替えて回数制限をすり抜けられないように)。
+ * account を渡したときは、狙われたアカウントごとの回数でも止める。
+ * 正しく入れても回数は戻さない(自分のアカウントで正しくログインして回数を消し、
+ * ほかの人のパスワードを試し続ける、ということができないように)。
  */
-export async function limit(store: Pick<Store, 'attempt'>, from: string, wrong: boolean, now: Date = new Date()): Promise<boolean> {
-  const key = (await sha256('from:' + from)).slice(0, 32); // IP アドレスそのものは残さない
-  const one = await store.attempt(key, wrong, LOCK.tries, LOCK.minutes * 60, now);
-  const all = await store.attempt('all', wrong, LOCK.all, LOCK.minutes * 60, now);
-  return one || all;
+export async function limit(store: Pick<Store, 'attempt'>, from: string, wrong: boolean, now: Date = new Date(), account?: string): Promise<boolean> {
+  const win = LOCK.minutes * 60;
+  const one = await store.attempt((await sha256('from:' + from)).slice(0, 32), wrong, LOCK.tries, win, now); // IP アドレスそのものは残さない
+  const acct = account ? await store.attempt('acct:' + (await sha256('acct:' + account)).slice(0, 32), wrong, LOCK.account, win, now) : false;
+  const all = await store.attempt('all', wrong, LOCK.all, win, now);
+  return one || acct || all;
 }
 
 /**

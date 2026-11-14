@@ -113,7 +113,7 @@ export async function login(body: Record<string, unknown>, d: AuthDeps): Promise
   const acc = await d.accounts.find(key);
   // 名前がないときも同じだけ時間をかけて、名前があるかどうかを時間から分からないようにする
   const ok = acc ? await checkPassword(pw, acc.passHash) : (await checkPassword(pw, dummyHash(d)), false);
-  if (await limit(d.gates, d.from, !ok, d.now)) throw locked();
+  if (await limit(d.gates, d.from, !ok, d.now, key)) throw locked();
   if (!ok || !acc) throw new AppError('login', '名前かパスワードが違います。', 401);
   return { token: await startSession(d, acc.id), name: acc.name };
 }
@@ -127,7 +127,7 @@ export async function logout(token: string | null, accounts: Accounts): Promise<
 export async function deleteAccount(body: Record<string, unknown>, user: { id: string }, d: AuthDeps & { store: Pick<Store, 'wipe'> }): Promise<void> {
   const acc = await d.accounts.findById(user.id);
   const ok = !!acc && (await checkPassword(typeof body.password === 'string' ? body.password : '', acc.passHash));
-  if (await limit(d.gates, d.from, !ok, d.now)) throw locked();
+  if (await limit(d.gates, d.from, !ok, d.now, user.id)) throw locked();
   if (!ok) throw new AppError('login', 'パスワードが違います。', 401);
   await d.store.wipe();
   await d.accounts.remove(user.id);

@@ -25,7 +25,6 @@ export function makeMemoryDb() {
     const live = r.count > 0 && t - r.since < windowSeconds * 1000;
     if (live && r.count >= tries) return true;
     if (wrong) gates.set(key, live ? { count: r.count + 1, since: r.since } : { count: 1, since: t });
-    else gates.set(key, { count: 0, since: t });
     return false;
   }
   const imagesSince = (sinceIso: string, owner?: string) =>
