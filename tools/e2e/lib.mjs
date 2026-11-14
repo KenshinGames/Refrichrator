@@ -43,7 +43,13 @@ export async function openPage(browser, { size = 'iphone', session = true, path 
   // ログイン済みの端末の状態から始める(扉で登録する流れは run.mjs の最初で確かめる)
   if (session) {
     const ses = await testSession();
-    await page.evaluateOnNewDocument((v) => { if (!localStorage.getItem('refricherator:v1')) localStorage.setItem('refricherator:v1', JSON.stringify({ session: v })); }, ses);
+    // 最初の1回だけ入れる(ログアウトしたあとに入れ直さない)
+    await page.evaluateOnNewDocument((v) => {
+      if (!sessionStorage.getItem('e2e:seeded')) {
+        sessionStorage.setItem('e2e:seeded', '1');
+        localStorage.setItem('refricherator:session', JSON.stringify(v));
+      }
+    }, ses);
   }
   await page.goto(BASE + hash, { waitUntil: 'networkidle0' });
   if (path) await page.evaluate((p) => { location.hash = p; window.dispatchEvent(new PopStateEvent('popstate')); }, path);
@@ -52,7 +58,7 @@ export async function openPage(browser, { size = 'iphone', session = true, path 
     errors,
     size,
     /** このページでログインしている人として、サーバーを呼ぶ */
-    api: async (action, body = {}) => apiCall(action, body, await page.evaluate(() => JSON.parse(localStorage.getItem('refricherator:v1') ?? '{}').session?.token ?? '')),
+    api: async (action, body = {}) => apiCall(action, body, await page.evaluate(() => JSON.parse(localStorage.getItem('refricherator:session') ?? '{}')?.token ?? '')),
     shot: (name) => page.screenshot({ path: `${OUT}${name}-${size}${dark ? '-dark' : ''}.png` }),
     /** 見えている文字で押す(ボタン・リンク) */
     async tap(text, { exact = false } = {}) {

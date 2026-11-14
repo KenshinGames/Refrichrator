@@ -59,7 +59,7 @@ await sleep(300);
 await shot('shop');
 console.log('ブラウザのエラー:', errors.length ? errors : 'なし');
 // 確認用のアカウントを消す
-const token = await page.evaluate(() => JSON.parse(localStorage.getItem('refricherator:v1') ?? '{}').session?.token);
+const token = await page.evaluate(() => JSON.parse(localStorage.getItem('refricherator:session') ?? '{}')?.token);
 const del = await fetch('https://vphcejuxczbttkuzqnlv.supabase.co/functions/v1/api', { method: 'POST', headers: { 'content-type': 'application/json', 'x-session': token }, body: JSON.stringify({ action: 'delete_account', password: ME.password }) });
 console.log('確認用のアカウントを削除:', del.status === 200 ? 'できた' : 'できなかった ' + del.status);
 await browser.close();

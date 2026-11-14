@@ -2,7 +2,7 @@
 // 表示の切れ・画面の切り替えの速さ・エラーを調べる。
 //   先に:npm run api / npm run dev      実行:npm run e2e [サイズ名…]
 import { fileURLToPath } from 'node:url';
-import { apiTest, launch, openPage, OUT, SIZES, sleep } from './lib.mjs';
+import { API, apiTest, BASE, launch, openPage, OUT, SIZES, sleep } from './lib.mjs';
 
 const only = process.argv.slice(2);
 const sizes = Object.keys(SIZES).filter((s) => !only.length || only.includes(s));
@@ -220,6 +220,21 @@ for (const size of sizes) {
   await h.page.reload({ waitUntil: 'domcontentloaded' });
   await h.waitText('何人分', 3000);
   expect(!(await h.page.$('.door-locked')), '開き直したらログインを聞かれた');
+
+  // ── アプリを閉じて開き直しても、通信できないときでも、ログインしたまま ──
+  {
+    const p2 = await h.page.browserContext().newPage();
+    await p2.setViewport(h.page.viewport());
+    await p2.setRequestInterception(true);
+    p2.on('request', (r) => (new URL(r.url()).port === new URL(API).port ? r.abort() : r.continue()));
+    await p2.goto(BASE, { waitUntil: 'domcontentloaded' });
+    await p2.waitForFunction(() => document.body.innerText.includes('なに作る'), { timeout: 5000 }).catch(() => {});
+    await sleep(1500); // 同期に失敗したあとも消えないことを見る
+    expect(await p2.evaluate(() => document.body.innerText.includes('なに作る')), '閉じて開き直したら、いつもの画面にならない');
+    expect(!(await p2.$('.door-locked')), '通信できないときに開いたら、ログインを聞かれた');
+    expect(await p2.evaluate(() => !!localStorage.getItem('refricherator:session')), '通信できないときに開いたら、ログインのしるしが消えた');
+    await p2.close();
+  }
 
   // ── ログアウトして、ログインし直す(中身はサーバーに残っている)──
   const before2 = (await h.api('sync')).items.length;

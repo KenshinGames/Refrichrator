@@ -24,7 +24,9 @@ export function makeMemoryDb() {
     const r = gates.get(key) ?? { count: 0, since: t };
     const live = r.count > 0 && t - r.since < windowSeconds * 1000;
     if (live && r.count >= tries) return true;
+    // 本番のデータベースの関数(gate_attempt)と同じ動き:まちがえたら1増やし、合っていたら0に戻す
     if (wrong) gates.set(key, live ? { count: r.count + 1, since: r.since } : { count: 1, since: t });
+    else if (r.count > 0) gates.set(key, { count: 0, since: t });
     return false;
   }
   const imagesSince = (sinceIso: string, owner?: string) =>

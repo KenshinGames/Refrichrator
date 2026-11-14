@@ -10,6 +10,9 @@ const PROD_API = 'https://vphcejuxczbttkuzqnlv.supabase.co/functions/v1/api';
 const API_URL: string = import.meta.env.VITE_API_URL ?? (import.meta.env.DEV ? `http://${location.hostname}:8791/functions/v1/api` : PROD_API);
 const CACHE_KEY = 'refricherator:v1';
 const NAME_KEY = 'refricherator:name'; // 最後にログインした名前(ログアウトしても残す)
+// ログイン中のしるし。食材などの大きな保存とは分けて、すぐに書く
+// (大きな保存が容量で失敗しても、ログインは消えないように)
+const SESSION_KEY = 'refricherator:session';
 
 export class ApiError extends Error {
   code: string;
@@ -102,7 +105,6 @@ function schedulePersist(): void {
       .slice(0, 30)
       .map((r) => (r.imageUrl?.startsWith('data:') ? { ...r, imageUrl: null } : r));
     const keep = {
-      session: state.session,
       items: state.items,
       staples: state.staples,
       settings: state.settings,
@@ -123,9 +125,35 @@ function schedulePersist(): void {
 function loadCache(): void {
   try {
     const raw = localStorage.getItem(CACHE_KEY);
-    if (raw) state = { ...state, ...JSON.parse(raw) };
+    if (raw) state = { ...state, ...JSON.parse(raw), session: null };
   } catch {
     // こわれていたら使わない
+  }
+  try {
+    const s = JSON.parse(localStorage.getItem(SESSION_KEY) ?? 'null');
+    if (s && typeof s.token === 'string' && typeof s.name === 'string') state = { ...state, session: { token: s.token, name: s.name } };
+  } catch {
+    // こわれていたら、もう一度ログインしてもらう
+  }
+}
+/** ログインのしるしを、その場で保存する(消すときは null) */
+function saveSession(s: State['session']): void {
+  try {
+    if (s) localStorage.setItem(SESSION_KEY, JSON.stringify(s));
+    else localStorage.removeItem(SESSION_KEY);
+  } catch {
+    // 保存できなくても、開いている間はログインしたまま使える
+  }
+}
+/**
+ * この端末の保存を、ブラウザが容量の都合で勝手に消さないように頼む。
+ * 頼めないブラウザや、断られたときは何もしない。
+ */
+function keepStorage(): void {
+  try {
+    void navigator.storage?.persist?.().catch(() => {});
+  } catch {
+    // 何もしない
   }
 }
 
@@ -151,7 +179,9 @@ async function api<T>(action: string, body: Record<string, unknown> = {}, timeou
   if (!res.ok || !data) {
     const err = data?.error;
     // ログインが切れていたら、扉にもどす
-    if (res.status === 401 && err?.code === 'session') set({ session: null });
+    // (通信が切れたときやサーバーの不調では消さない。サーバーが「このしるしは無効」と答えたときだけ。
+    //  その人の食材なども手元から消して、次にログインする人に見えないようにする)
+    if (res.status === 401 && err?.code === 'session') clearLocal();
     throw new ApiError(err?.code ?? 'server', err?.message ?? 'うまくいきませんでした。もう一度お試しください。', res.status);
   }
   return data as T;
@@ -205,7 +235,10 @@ export function boot(): void {
   // 合言葉は URL からは受け取らない(リンクを送ると、トークの履歴などから見えてしまうため)。
   // 以前の形のリンク(…#k=合言葉)で開かれたときは、使わずにアドレス欄から消すだけにする。
   if (/[#&?]k=/.test(location.hash + location.search)) history.replaceState(null, '', location.pathname);
-  if (state.session) void sync();
+  if (state.session) {
+    keepStorage();
+    void sync();
+  }
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible' && state.session) void sync();
   });
@@ -229,7 +262,10 @@ export async function signIn(mode: 'signup' | 'login', input: { name: string; pa
     } catch {
       // 何もしない
     }
-    set({ session: { token: r.token, name: r.name } });
+    const session = { token: r.token, name: r.name };
+    saveSession(session);
+    set({ session });
+    keepStorage();
     await sync();
     return null;
   } catch (e) {
@@ -243,6 +279,7 @@ export async function leave(): Promise<void> {
   clearLocal();
 }
 function clearLocal(): void {
+  saveSession(null);
   try {
     localStorage.removeItem(CACHE_KEY);
   } catch {

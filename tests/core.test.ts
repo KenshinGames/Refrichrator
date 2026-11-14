@@ -128,15 +128,15 @@ describe('当て推量を止める', () => {
     expect(await gate(store, '2.2.2.2', 'KenshinApps', hash, at(1))).toBe('ok');
     expect(await gate(store, '1.1.1.1', 'KenshinApps', hash, at(LOCK.minutes + 1))).toBe('ok');
   });
-  it('合っていても回数は戻さない(時間で戻る)。何も入れていないものは数えない', async () => {
+  it('合っていたら回数を0に戻す。何も入れていないものは数えない', async () => {
     const store = makeMemoryStore();
     const hash = await sha256('KenshinApps');
     for (let i = 0; i < LOCK.tries - 1; i++) await gate(store, 'a', 'guess' + i, hash, at(0));
     expect(await gate(store, 'a', 'KenshinApps', hash, at(0))).toBe('ok');
     for (let i = 0; i < 20; i++) expect(await gate(store, 'a', '', hash, at(1))).toBe('wrong');
-    expect(await gate(store, 'a', 'guess-last', hash, at(1))).toBe('wrong'); // ここで5回目
-    expect(await gate(store, 'a', 'KenshinApps', hash, at(2))).toBe('locked');
-    expect(await gate(store, 'a', 'KenshinApps', hash, at(LOCK.minutes + 1))).toBe('ok');
+    // 0に戻ったので、また LOCK.tries - 1 回まではまちがえても通る
+    for (let i = 0; i < LOCK.tries - 1; i++) expect(await gate(store, 'a', 'again' + i, hash, at(1))).toBe('wrong');
+    expect(await gate(store, 'a', 'KenshinApps', hash, at(2))).toBe('ok');
   });
   it('同時にたくさん送られても、試せるのは決まった回数だけ', async () => {
     const store = makeMemoryStore();

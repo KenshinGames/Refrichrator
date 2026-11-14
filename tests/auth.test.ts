@@ -62,11 +62,12 @@ describe('登録とログイン', () => {
     for (let i = 0; i < LOCK.all; i++) await login({ name: 'taro', password: 'x' }, { ...auth, from: `10.1.0.${i}` }).catch(() => {});
     await expect(login({ name: 'taro', password: 'taro-pass-1' }, { ...auth, from: '10.9.9.9' })).rejects.toMatchObject({ code: 'locked' });
   });
-  it('自分のアカウントで正しくログインしても、ほかの人への当て推量の回数は消えない', async () => {
+  it('自分のアカウントで正しくログインしても、狙ったアカウントの回数は消えない', async () => {
     const { auth } = await setup();
     await signup({ name: 'Taro', password: 'taro-pass-1', invite: 'KenshinApps' }, auth);
     await signup({ name: 'Mallory', password: 'mallory-pass', invite: 'KenshinApps' }, { ...auth, from: '10.5.5.5' });
-    for (let round = 0; round < 3; round++) {
+    // 2回まちがえるごとに自分で正しくログインして、接続元と全体の回数を0に戻しながら試し続けても
+    for (let round = 0; round < LOCK.account / 2; round++) {
       for (let i = 0; i < 2; i++) await login({ name: 'taro', password: `guess-${round}-${i}` }, auth).catch(() => {});
       await login({ name: 'mallory', password: 'mallory-pass' }, auth).catch(() => {}); // 自分で正しくログイン
     }

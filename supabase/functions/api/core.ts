@@ -272,8 +272,9 @@ export const LOCK = { tries: 5, account: 10, all: 30, minutes: 15 };
  * 1回の試行を記録して、止めている最中なら true を返す。
  * 接続元ごとの回数に加えて、全体の回数でも止める(接続元を名乗り替えて回数制限をすり抜けられないように)。
  * account を渡したときは、狙われたアカウントごとの回数でも止める。
- * 正しく入れても回数は戻さない(自分のアカウントで正しくログインして回数を消し、
- * ほかの人のパスワードを試し続ける、ということができないように)。
+ * 正しく入れると、そのときの接続元・アカウント・全体の回数は0に戻る(データベースの gate_attempt の動き)。
+ * 自分のアカウントで正しくログインしても、ほかの人のアカウントの回数は消えないので、
+ * 1つのアカウントを狙って試せるのは LOCK.minutes 分に LOCK.account 回まで。
  */
 export async function limit(store: Pick<Store, 'attempt'>, from: string, wrong: boolean, now: Date = new Date(), account?: string): Promise<boolean> {
   const win = LOCK.minutes * 60;
