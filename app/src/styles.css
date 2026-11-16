@@ -251,8 +251,8 @@ ol {
   color: var(--ink);
 }
 .btn-light {
-  background: linear-gradient(180deg, #f3d98f, #d9ae4f);
-  color: #0b2218;
+  background: linear-gradient(180deg, #17553c, #0f3d2b);
+  color: #f7e7b8;
 }
 .btn-done {
   background: var(--fresh-tint);
@@ -307,12 +307,12 @@ ol {
   outline-offset: 0;
 }
 .field-dark {
-  background: rgba(255, 255, 255, 0.07);
-  box-shadow: inset 0 0 0 1px rgba(232, 200, 119, 0.3);
-  color: #fff;
+  background: #f6f4ee;
+  box-shadow: inset 0 0 0 1px rgba(16, 34, 26, 0.1);
+  color: #10221a;
 }
 .field-dark:focus {
-  outline-color: #e8c877;
+  outline-color: #c49a36;
 }
 .hint {
   font-size: 14px;
@@ -1427,6 +1427,7 @@ button.idea:active {
 /* ───────── 扉(黒いガラスの扉が開いて、庫内の光がこぼれる) ───────── */
 
 .door {
+  color-scheme: light; /* 扉はいつも白(ダークモードでも) */
   position: absolute;
   z-index: 50;
   inset: 0;
@@ -1450,8 +1451,8 @@ button.idea:active {
   transform-origin: left center;
   backface-visibility: hidden;
   background:
-    linear-gradient(112deg, rgba(255, 236, 170, 0) 30%, rgba(255, 236, 170, 0.06) 46%, rgba(255, 236, 170, 0) 60%),
-    radial-gradient(120% 80% at 30% 38%, #1a5a3f 0%, #0d3526 46%, #06170f 100%);
+    linear-gradient(112deg, rgba(232, 200, 119, 0) 30%, rgba(232, 200, 119, 0.1) 46%, rgba(232, 200, 119, 0) 60%),
+    #ffffff;
 }
 .door-open .door-leaf {
   animation: swing 0.6s cubic-bezier(0.6, 0.04, 0.3, 1) both;
@@ -1465,8 +1466,8 @@ button.idea:active {
   border-radius: 5px;
   background: linear-gradient(90deg, #8a6418, #f6dc93 45%, #b88a2c);
   box-shadow:
-    -6px 0 14px rgba(0, 0, 0, 0.45),
-    0 0 18px rgba(240, 205, 120, 0.25);
+    -4px 0 12px rgba(120, 90, 20, 0.18),
+    0 0 18px rgba(240, 205, 120, 0.3);
 }
 .door-face {
   position: absolute;
@@ -1481,7 +1482,7 @@ button.idea:active {
   font-weight: 500;
   letter-spacing: 0.34em;
   line-height: 1.15;
-  color: #e8c877;
+  color: #a67c1e;
   white-space: nowrap;
   text-transform: uppercase;
 }
@@ -1489,7 +1490,7 @@ button.idea:active {
   margin-top: 14px;
   font-size: 24px;
   font-weight: 600;
-  color: #fbf4de;
+  color: #0f3d2b;
   line-height: 1.45;
   letter-spacing: 0.04em;
 }
@@ -1501,7 +1502,7 @@ button.idea:active {
   display: block;
   font-size: 13px;
   font-weight: 500;
-  color: rgba(255, 255, 255, 0.72);
+  color: #5f6b64;
   margin-bottom: 8px;
 }
 .door-form .btn {
@@ -1511,13 +1512,13 @@ button.idea:active {
   margin-top: 10px;
   font-size: 14px;
   font-weight: 500;
-  color: #ff8a7a;
+  color: #c22d1b;
 }
 
 .door-form .btn:disabled {
   opacity: 1;
-  background: rgba(255, 255, 255, 0.12);
-  color: rgba(255, 255, 255, 0.4);
+  background: #f0ede4;
+  color: #9ba59f;
 }
 .door-open .door-face {
   animation: fade 0.15s ease-in reverse both;
@@ -1538,20 +1539,21 @@ button.idea:active {
   margin-bottom: 18px;
   padding: 4px;
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.08);
+  background: #f0ede4;
 }
 .door-modes button {
   flex: 1;
   min-height: 44px;
   border-radius: 10px;
-  color: rgba(255, 255, 255, 0.72);
+  color: #5f6b64;
   font-size: 15px;
   font-weight: 500;
   text-align: center;
 }
 .door-modes button.on {
-  background: rgba(232, 200, 119, 0.18);
-  color: #f6dc93;
+  background: #ffffff;
+  color: #0f3d2b;
+  box-shadow: 0 1px 3px rgba(16, 34, 26, 0.12);
 }
 .door-form label {
   margin-top: 14px;
@@ -1559,7 +1561,7 @@ button.idea:active {
 .door-form label small {
   margin-left: 8px;
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.5);
+  color: #9ba59f;
 }
 .door-form .btn {
   margin-top: 20px;
