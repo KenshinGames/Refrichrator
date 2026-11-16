@@ -36,7 +36,8 @@ export async function openPage(browser, { size = 'iphone', session = true, path 
   await page.setViewport({ width, height, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
   // E2E_DARK=1 のときは、ダークモードで確かめる(写しの名前に -dark が付く)
   const dark = process.env.E2E_DARK === '1';
-  if (dark) await page.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: 'dark' }]);
+  // ダークは設定で選んだときだけなので、選んだ状態(端末に保存した値)から始める
+  if (dark) await page.evaluateOnNewDocument(() => localStorage.setItem('refrichrator:theme', 'dark'));
   const errors = [];
   page.on('pageerror', (e) => errors.push(String(e)));
   page.on('console', (m) => m.type() === 'error' && !/Failed to load resource/.test(m.text()) && errors.push(m.text()));

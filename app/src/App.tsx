@@ -5,6 +5,8 @@ import { Fridge, stack } from './Fridge.tsx';
 import { batchFor, daysLeft, deleteAccount, lastName, leave, likelyScene, loadShopping, saveSettings, signIn, useStore } from './store.ts';
 import type { Scene } from './store.ts';
 import { back, go, Icon, ideaPath, leftLabel, leftTone, Ring, Sheet, Stepper, Toast, useRoute, useVisualViewport } from './ui.tsx';
+import { getTheme, setTheme } from './theme.ts';
+import type { Theme } from './theme.ts';
 
 const SCENE_ORDER: Scene[] = ['tired', 'holiday', 'bento'];
 const WEEK = ['日', '月', '火', '水', '木', '金', '土'];
@@ -319,6 +321,11 @@ function Settings() {
   const name = useStore((s) => s.session?.name ?? '');
   const [deleting, setDeleting] = useState(false);
   const [dislikes, setDislikes] = useState(settings.dislikes);
+  const [theme, setThemeState] = useState<Theme>(getTheme);
+  const pickTheme = (t: Theme) => {
+    setTheme(t);
+    setThemeState(t);
+  };
   useEffect(() => setDislikes(settings.dislikes), [settings.dislikes]);
   return (
     <div className="screen">
@@ -346,6 +353,23 @@ function Settings() {
           aria-label="使わないもの"
           enterKeyHint="done"
         />
+      </section>
+
+      <section className="set">
+        <h2>画面の明るさ</h2>
+        <div className="seg" role="radiogroup" aria-label="画面の明るさ">
+          {(
+            [
+              ['light', 'ライト', 'sun'],
+              ['dark', 'ダーク', 'moon'],
+            ] as const
+          ).map(([value, label, icon]) => (
+            <button key={value} role="radio" aria-checked={theme === value} className={theme === value ? 'on' : ''} onClick={() => pickTheme(value)}>
+              <Icon name={icon} size={18} />
+              {label}
+            </button>
+          ))}
+        </div>
       </section>
 
       <section className="set">
