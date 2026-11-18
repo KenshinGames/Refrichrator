@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import { IdeaScreen, PlanScreen, RecipeScreen, SCENE_INFO, SceneScreen } from './Cook.tsx';
 import { Fridge, stack } from './Fridge.tsx';
-import { batchFor, daysLeft, deleteAccount, lastName, leave, likelyScene, loadShopping, saveSettings, signIn, useStore } from './store.ts';
+import { batchFor, daysLeft, deleteAccount, lastName, leave, likelyScene, loadShopping, prewarmScenes, saveSettings, signIn, useStore } from './store.ts';
 import type { Scene } from './store.ts';
 import { back, go, Icon, ideaPath, leftLabel, leftTone, Ring, Sheet, Stepper, Toast, useRoute, useVisualViewport } from './ui.tsx';
 import { getTheme, setTheme } from './theme.ts';
@@ -168,6 +168,11 @@ function SceneCard({ scene, big }: { scene: Scene; big: boolean }) {
 
 function Home() {
   const items = useStore((s) => s.items);
+  const synced = useStore((s) => s.synced);
+  // ホームに来たら、3つの場面の提案を裏で確定させておく(登録のたびには呼ばない)
+  useEffect(() => {
+    if (synced) void prewarmScenes();
+  }, [synced, items]);
   const now = new Date();
   const soon = stack(items.filter((i) => daysLeft(i) <= 3)).slice(0, 6);
   // いま開きそうな場面(平日はつかれた日、土日は休みの日)を大きく出す
