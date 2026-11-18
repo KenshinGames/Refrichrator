@@ -1,7 +1,7 @@
 // 調味料の画面:「いつも家にある」前提にしてきた調味料を、在庫と賞味期限で管理する。
 // デフォルトは基本の調味料が全部「ある・賞味期限なし」で並ぶ。切らしたら「切らしてる」にすると、
 // レシピでは買い足し扱いになる(サーバー側の対応は次のデプロイから)。
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { addDays, daysBetween, normName, PANTRY, todayJst } from '../../supabase/functions/api/core.ts';
 import { setPantry, toast, useStore } from './store.ts';
 import type { Seasoning } from './store.ts';
@@ -19,6 +19,7 @@ export function Pantry() {
   const pantry = useStore((s) => s.pantry);
   const [adding, setAdding] = useState('');
   const [editing, setEditing] = useState<string | null>(null);
+  const addInputRef = useRef<HTMLInputElement>(null);
   const missing = PANTRY.filter((name) => !pantry.some((p) => normName(p.name) === normName(name)));
   const editingItem = editing ? pantry.find((p) => p.name === editing) : undefined;
 
@@ -27,7 +28,11 @@ export function Pantry() {
   };
   const addName = (raw: string) => {
     const name = raw.trim();
-    if (!name) return;
+    if (!name) {
+      // 空のまま押したときは、入力欄にフォーカスして「まず名前を入れる」ことが分かるようにする
+      addInputRef.current?.focus();
+      return;
+    }
     if (pantry.some((p) => normName(p.name) === normName(name))) {
       toast(`「${name}」はもう一覧にあります`);
       return;
@@ -45,6 +50,7 @@ export function Pantry() {
 
       <div className="pantry-add">
         <input
+          ref={addInputRef}
           className="field"
           value={adding}
           onChange={(e) => setAdding(e.target.value)}
@@ -54,7 +60,7 @@ export function Pantry() {
           placeholder="調味料を足す(例:ラー油)"
           aria-label="足す調味料の名前"
         />
-        <button className="btn btn-sub" onClick={() => addName(adding)} disabled={!adding.trim()}>
+        <button className="btn btn-sub" onClick={() => addName(adding)}>
           足す
         </button>
       </div>
