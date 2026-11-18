@@ -242,8 +242,8 @@ function SwipeRow({
 
   return (
     <div className="swipe">
-      <button className="swipe-del" aria-label={`${item.name}を冷蔵庫から出す`} tabIndex={open ? 0 : -1} onClick={remove}>
-        出す
+      <button className="swipe-del" aria-label={`${item.name}を削除`} tabIndex={open ? 0 : -1} onClick={remove}>
+        削除
       </button>
       <button
         ref={frontRef}
