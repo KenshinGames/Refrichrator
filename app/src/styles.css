@@ -1072,6 +1072,34 @@ button.dish:active {
   background-size: 220% 100%;
   animation: shimmer 1.5s linear infinite;
 }
+/* 写真の左上のバッジ:家にあるものだけで作れるか、買い足しが要るか */
+.photo-badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 700;
+  line-height: 1.3;
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(10, 20, 14, 0.25);
+}
+.badge-home {
+  background: var(--primary);
+}
+.badge-buy {
+  background: var(--warm);
+}
+/* レシピ画面の大きい写真では、左上の戻るボタンと重ならない位置に */
+.photo-hero .photo-badge {
+  top: calc(var(--top) + 64px);
+  left: 14px;
+}
 .photo-note {
   display: flex;
   flex-direction: column;

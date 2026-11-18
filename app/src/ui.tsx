@@ -223,6 +223,7 @@ export function Sheet({ title, onClose, children, footer }: { title: string; onC
 
 export function Photo({ recipe, className = '' }: { recipe: Recipe; className?: string }) {
   const status = useStore((s) => s.image[recipe.id]);
+  const buy = recipe.ingredients.filter((i) => i.source === 'buy');
   const [shown, setShown] = useState(false);
   const tried = useRef(false);
   useEffect(() => {
@@ -234,6 +235,17 @@ export function Photo({ recipe, className = '' }: { recipe: Recipe; className?: 
   }, [recipe.id, recipe.imageUrl, status]);
   return (
     <div className={`photo ${className} ${recipe.imageUrl ? '' : status === 'capped' || status === 'error' ? 'photo-none' : 'photo-wait'}`}>
+      {buy.length === 0 ? (
+        <span className="photo-badge badge-home">
+          <Icon name="check" size={12} />
+          家にあるものだけ
+        </span>
+      ) : (
+        <span className="photo-badge badge-buy">
+          <Icon name="basket" size={12} />
+          買い足しあり
+        </span>
+      )}
       {recipe.imageUrl ? (
         <img src={recipe.imageUrl} alt={recipe.title} className={shown ? 'on' : ''} onLoad={() => setShown(true)} decoding="async" />
       ) : status === 'error' ? (

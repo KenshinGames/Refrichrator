@@ -91,7 +91,7 @@ export function DishCard({ recipe, items }: { recipe: Recipe; items: Item[] }) {
           <Icon name="clock" size={16} />
           {recipe.minutes}分
         </span>
-        {buy.length === 0 ? <span className="tag tag-home">家にあるものだけ</span> : <span className="tag tag-buy">{buy.map((b) => b.name).join('、')}を買い足す</span>}
+        {buy.length > 0 && <span className="tag tag-buy">{buy.map((b) => b.name).join('、')}を買い足す</span>}
       </span>
       {soon.length > 0 && <span className="dish-soon">{soon.map((s) => s.name).join('・')}を使い切れます</span>}
     </button>
