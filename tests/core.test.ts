@@ -103,6 +103,67 @@ describe('AI の応答を直す', () => {
     ]);
     expect(dish.servings).toBe(2);
   });
+  it('料理:切らしている調味料は買い足し、ある調味料は家にあるものとして扱う', () => {
+    const items: Item[] = [{ id: 'a', name: '豚こま肉', category: '肉', addedOn: '2026-11-14', expiresOn: '2026-11-17' }];
+    const pantry = [
+      { name: '醤油', out: true, expiresOn: null },
+      { name: 'ラー油', out: false, expiresOn: null },
+    ];
+    const [dish] = cleanDishes(
+      {
+        dishes: [
+          {
+            title: '炒めもの',
+            lead: '',
+            minutes: 10,
+            ingredients: [
+              { name: '醤油', amount: '大さじ1', source: 'pantry' },
+              { name: 'ラー油', amount: '小さじ1', source: 'pantry' },
+              { name: '塩', amount: '少々', source: 'pantry' },
+            ],
+            steps: ['炒める'],
+            tip: '',
+          },
+        ],
+      },
+      items,
+      'tired',
+      1,
+      3,
+      pantry,
+    );
+    expect(dish.ingredients).toEqual([
+      { name: '醤油', amount: '大さじ1', source: 'buy' },
+      { name: 'ラー油', amount: '小さじ1', source: 'pantry' },
+      { name: '塩', amount: '少々', source: 'pantry' },
+    ]);
+  });
+});
+
+describe('調味料', () => {
+  it('最初は基本の調味料が全部「ある・期限なし」で返る', async () => {
+    const { call } = setup();
+    const r = await call('sync');
+    expect(r.pantry.length).toBeGreaterThan(10);
+    expect(r.pantry.every((p: any) => p.out === false && p.expiresOn === null)).toBe(true);
+    expect(r.pantry.some((p: any) => p.name === '醤油')).toBe(true);
+  });
+  it('保存した調味料が同期で返り、切らした状態も保たれる', async () => {
+    const { call } = setup();
+    const saved = await call('pantry_set', {
+      items: [
+        { name: '醤油', out: true, expiresOn: '2027-01-01' },
+        { name: 'ラー油', out: false, expiresOn: null },
+        { name: '醤油', out: false, expiresOn: null },
+      ],
+    });
+    expect(saved.pantry).toHaveLength(2);
+    const r = await call('sync');
+    expect(r.pantry).toEqual([
+      { name: '醤油', out: true, expiresOn: '2027-01-01' },
+      { name: 'ラー油', out: false, expiresOn: null },
+    ]);
+  });
 });
 
 describe('合言葉', () => {

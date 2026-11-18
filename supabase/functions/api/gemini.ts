@@ -199,13 +199,15 @@ export const prompts: Prompts = {
     };
   },
 
-  suggest({ scene, items, settings, avoid, dish, buy }) {
+  suggest({ scene, items, settings, avoid, dish, buy, pantry }) {
+    const pantryNames = pantry ? pantry.filter((p) => !p.out).map((p) => p.name) : PANTRY;
+    const outNames = pantry ? pantry.filter((p) => p.out).map((p) => p.name) : [];
     const common = `あなたは家庭料理の先生です。冷蔵庫の食材を、おいしく使い切るための料理を考えます。
 
 冷蔵庫にあるもの(期限の近い順):
 ${fridgeText(items)}
 
-いつも家にある調味料など:${PANTRY.join('、')}
+いつも家にある調味料など:${pantryNames.join('、') || 'なし'}${outNames.length ? `\n切らしている調味料:${outNames.join('、')}(家にないので、使う場合は買い足し(buy)として書く)` : ''}
 
 ${SCENE_TEXT[scene]}
 
@@ -231,7 +233,8 @@ ${avoid.length ? `- 最近出した次の料理とは違うものにする:${avo
     return { parts: [{ text: common + ask }], schema: dishesSchema };
   },
 
-  shopping({ items, settings }) {
+  shopping({ items, settings, pantry }) {
+    const pantryNames = pantry ? pantry.filter((p) => !p.out).map((p) => p.name) : PANTRY;
     return {
       parts: [
         {
@@ -240,7 +243,7 @@ ${avoid.length ? `- 最近出した次の料理とは違うものにする:${avo
 冷蔵庫にあるもの(期限の近い順):
 ${fridgeText(items)}
 
-いつも家にある調味料など:${PANTRY.join('、')}
+いつも家にある調味料など:${pantryNames.join('、') || 'なし'}
 
 きまり:
 - buy は買い足す食材を1つだけ(スーパーで買える、ふつうの食材名)。4つとも違う食材にする

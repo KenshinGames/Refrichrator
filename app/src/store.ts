@@ -1,10 +1,10 @@
 // アプリの状態と、中継サーバーとのやりとり。
 // 画面はいつも手元の状態をすぐに描き、サーバーとの同期は裏で行う(押してから待たせない)。
 import { useSyncExternalStore } from 'react';
-import { addDays, daysBetween, DEFAULT_SETTINGS, SCENES, todayJst } from '../../supabase/functions/api/core.ts';
-import type { Item, Limits, NewItem, Recipe, Scene, Settings, ShoppingIdea, Staple, Usage } from '../../supabase/functions/api/core.ts';
+import { addDays, daysBetween, DEFAULT_SETTINGS, defaultSeasonings, SCENES, todayJst } from '../../supabase/functions/api/core.ts';
+import type { Item, Limits, NewItem, Recipe, Scene, Seasoning, Settings, ShoppingIdea, Staple, Usage } from '../../supabase/functions/api/core.ts';
 
-export type { Item, NewItem, Recipe, Scene, Settings, ShoppingIdea, Staple };
+export type { Item, NewItem, Recipe, Scene, Seasoning, Settings, ShoppingIdea, Staple };
 
 const PROD_API = 'https://vphcejuxczbttkuzqnlv.supabase.co/functions/v1/api';
 const API_URL: string = import.meta.env.VITE_API_URL ?? (import.meta.env.DEV ? `http://${location.hostname}:8791/functions/v1/api` : PROD_API);
@@ -34,6 +34,7 @@ export interface State {
   synced: boolean; // この起動で1回でもサーバーと同期できたか
   items: Item[];
   staples: Staple[];
+  pantry: Seasoning[]; // 調味料タブの内容(在庫と賞味期限)
   settings: Settings;
   usage: Usage;
   limits: Limits;
@@ -58,6 +59,7 @@ let state: State = {
   synced: false,
   items: [],
   staples: [],
+  pantry: defaultSeasonings(),
   settings: DEFAULT_SETTINGS,
   usage: { images: 0, texts: 0 },
   limits: { images: 60, allImages: 180, texts: 600 },
@@ -112,6 +114,7 @@ function schedulePersist(): void {
     const keep = {
       items: state.items,
       staples: state.staples,
+      pantry: state.pantry,
       settings: state.settings,
       usage: state.usage,
       limits: state.limits,
@@ -233,6 +236,7 @@ interface SyncResult {
   items: Item[];
   settings: Settings;
   staples: Staple[];
+  pantry?: Seasoning[]; // 古いサーバーは返さないので任意
   usage: Usage;
   limits: State['limits'];
 }
@@ -316,12 +320,26 @@ function applySync(r: SyncResult): void {
     items: sortItems(r.items),
     settings: r.settings,
     staples: r.staples,
+    ...(Array.isArray(r.pantry) ? { pantry: r.pantry } : {}),
     usage: r.usage,
     limits: r.limits,
     synced: true,
     ...(r.name && state.session ? { session: { ...state.session, name: r.name } } : {}),
   });
   prewarmSoon(600);
+}
+
+/** 調味料タブの変更を保存する(手元はすぐ変え、サーバーへは後から送る) */
+export function setPantry(next: Seasoning[]): void {
+  set({ pantry: next });
+  api<{ pantry: Seasoning[] }>('pantry_set', { items: next })
+    .then((r) => {
+      if (Array.isArray(r.pantry)) set({ pantry: r.pantry });
+    })
+    .catch((e) => {
+      toast(message(e));
+      void sync();
+    });
 }
 
 /** 今いちばん開きそうな場面(平日は「つかれた日」、土日は「休みの日」) */

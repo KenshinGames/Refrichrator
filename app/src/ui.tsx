@@ -11,6 +11,7 @@ import type { Item, Recipe, Scene } from './store.ts';
 export type Route =
   | { name: 'home' }
   | { name: 'fridge' }
+  | { name: 'pantry' }
   | { name: 'plan' }
   | { name: 'shop' }
   | { name: 'settings' }
@@ -21,6 +22,7 @@ export type Route =
 function parseRoute(hash: string): Route {
   const p = hash.replace(/^#\/?/, '').split('/').map(decodeURIComponent);
   if (p[0] === 'fridge') return { name: 'fridge' };
+  if (p[0] === 'pantry') return { name: 'pantry' };
   if (p[0] === 'plan') return { name: 'plan' };
   if (p[0] === 'shop') return { name: 'shop' };
   if (p[0] === 'settings') return { name: 'settings' };
@@ -93,6 +95,12 @@ const PATHS: Record<string, ReactNode> = {
     </>
   ),
   pen: <path d="M4.5 19.5l1-4L16.3 4.7a1.6 1.6 0 0 1 2.3 0l.7.7a1.6 1.6 0 0 1 0 2.3L8.5 18.5zM14.5 6.5l3 3" />,
+  bottle: (
+    <>
+      <rect x="9.7" y="2.7" width="4.6" height="2.4" rx="0.8" />
+      <path d="M10.3 5.1v2l-1.8 2.3a3 3 0 0 0-.6 1.8v7.6a2.5 2.5 0 0 0 2.5 2.5h3.2a2.5 2.5 0 0 0 2.5-2.5V11.2a3 3 0 0 0-.6-1.8L13.7 7.1v-2M7.9 15h8.2" />
+    </>
+  ),
   star: <path d="M12 3.600l2.500 5.200 5.700.800-4.100 4 1 5.700-5.100-2.700-5.100 2.700 1-5.700-4.100-4 5.700-.800z" />,
   // お気に入り済み用:中を塗りつぶした星(線だけの星と見分けがつくように)
   starFill: (

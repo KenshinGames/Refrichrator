@@ -949,6 +949,94 @@ button.row:active {
   background: var(--surface);
   touch-action: pan-y;
   will-change: transform;
+  cursor: pointer;
+}
+/* 行の中の量ステッパー:左に−、真ん中に数、右に＋ */
+.qty {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.qty-btn {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--fill);
+  color: var(--ink);
+}
+.qty-btn:active {
+  background: var(--fill-press);
+}
+.qty-num {
+  min-width: 24px;
+  text-align: center;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+/* ───────── 調味料 ───────── */
+
+.pantry-add {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 6px 0 12px;
+}
+.pantry-add .field {
+  flex: 1;
+}
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 7px 12px;
+  border-radius: 999px;
+  background: var(--fill);
+  font-size: 13px;
+  font-weight: 500;
+}
+.pantry-row {
+  cursor: pointer;
+}
+.pantry-sub {
+  font-size: 12.5px;
+  color: var(--sub);
+}
+.pantry-sub.hot {
+  color: var(--hot);
+  font-weight: 600;
+}
+.stock {
+  flex: none;
+  min-width: 78px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: var(--fresh-tint);
+  color: var(--fresh);
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+}
+.stock.out {
+  background: var(--fill);
+  color: var(--sub);
+}
+.sheet-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  font-size: 15px;
 }
 .sheet-sub {
   margin-top: 24px;

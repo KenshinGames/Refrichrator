@@ -1,6 +1,6 @@
 // 冷蔵庫の画面:食材を足す4つの方法と、今あるものの一覧。
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { normName } from '../../supabase/functions/api/core.ts';
+import { daysBetween, normName, todayJst } from '../../supabase/functions/api/core.ts';
 import { lookup, quickParse, quickPicks } from './foods.ts';
 import { addItems, ApiError, daysLeft, parse, removeItems, restoreItems, setDays, toast, useStore } from './store.ts';
 import type { Item, NewItem } from './store.ts';
@@ -194,11 +194,23 @@ function SwipeRow({
   const [drag, setDrag] = useState(false);
   const startRef = useRef<{ x: number; y: number; mode: '' | 'h' | 'v'; base: number } | null>(null);
   const movedRef = useRef(false);
-  const frontRef = useRef<HTMLButtonElement>(null);
+  const frontRef = useRef<HTMLDivElement>(null);
   const delDownRef = useRef<{ x: number; y: number } | null>(null); // 「削除」を押し始めた位置(流れで触れただけか見分ける)
 
   // 一覧で1つにまとめて見せている、同じ名前・同じ期限の分もまとめて出す
   const mates = all.filter((i) => normName(i.name) === normName(item.name) && i.expiresOn === item.expiresOn);
+  // 量の増減:このアプリの「量」は個数。同じ名前・同じ期限の分を1つ足す/1つ出す
+  const plus = () => {
+    addItems([{ name: item.name, category: item.category, days: Math.max(0, daysBetween(todayJst(), item.expiresOn)) }]);
+  };
+  const minus = () => {
+    const target = mates[mates.length - 1] ?? item;
+    removeItems([target.id]);
+    if (mates.length <= 1) {
+      // 最後の1つが消えるときだけ知らせる(続けて減らしているときに毎回出さない)
+      toast(`${item.name}を出しました`, { label: '元に戻す', run: () => restoreItems([target]) });
+    }
+  };
   const remove = () => {
     const gone = mates.length ? mates : [item];
     removeItems(gone.map((i) => i.id));
@@ -286,9 +298,12 @@ function SwipeRow({
       >
         削除
       </button>
-      <button
+      <div
         ref={frontRef}
         className="row swipe-front"
+        role="button"
+        tabIndex={0}
+        aria-label={`${item.name}の詳細`}
         style={{ transform: `translateX(${tx}px)`, transition: drag ? 'none' : 'transform 0.18s ease-out' }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
@@ -308,14 +323,19 @@ function SwipeRow({
       >
         <Ring item={item} />
         <span className="row-main">
-          <span className="row-name">
-            {item.name}
-            {count > 1 && <span className="times">×{count}</span>}
-          </span>
+          <span className="row-name">{item.name}</span>
           <span className={`left left-${leftTone(daysLeft(item))}`}>{leftLabel(daysLeft(item))}</span>
         </span>
-        <Icon name="right" size={18} />
-      </button>
+        <span className="qty" onPointerDown={(e) => e.stopPropagation()}>
+          <button className="qty-btn" aria-label={`${item.name}を1つ減らす`} onClick={(e) => { e.stopPropagation(); minus(); }}>
+            <Icon name="minus" size={16} />
+          </button>
+          <span className="qty-num">{count}</span>
+          <button className="qty-btn" aria-label={`${item.name}を1つ増やす`} onClick={(e) => { e.stopPropagation(); plus(); }}>
+            <Icon name="plus" size={16} />
+          </button>
+        </span>
+      </div>
     </div>
   );
 }

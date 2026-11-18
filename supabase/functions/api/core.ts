@@ -57,6 +57,16 @@ export interface Staple {
   days: number;
   count: number;
 }
+/** 調味料タブで管理する調味料。out=true は「切らしている」。expiresOn は賞味期限(任意、なければ null) */
+export interface Seasoning {
+  name: string;
+  out: boolean;
+  expiresOn: string | null;
+}
+/** 調味料の初期状態:いつも家にあるもの全部が「ある・賞味期限なし」 */
+export function defaultSeasonings(): Seasoning[] {
+  return PANTRY.map((name) => ({ name, out: false, expiresOn: null }));
+}
 export interface Usage {
   images: number;
   texts: number;
@@ -119,7 +129,7 @@ export interface Prompts {
   parseText(text: string): { parts: Part[]; schema: unknown };
   parseImage(image: { data: string; mime: string }, kind: 'receipt' | 'photo'): { parts: Part[]; schema: unknown };
   suggest(input: SuggestInput): { parts: Part[]; schema: unknown };
-  shopping(input: { items: (Item & { daysLeft: number })[]; settings: Settings }): { parts: Part[]; schema: unknown };
+  shopping(input: { items: (Item & { daysLeft: number })[]; settings: Settings; pantry?: Seasoning[] }): { parts: Part[]; schema: unknown };
   image(recipe: Recipe): string;
 }
 export interface SuggestInput {
@@ -129,6 +139,7 @@ export interface SuggestInput {
   avoid: string[];
   dish?: string; // 指定の1品だけ作るとき
   buy?: string; // そのとき買い足す前提のもの
+  pantry?: Seasoning[]; // その人の調味料リスト(切らしているものは「ある」前提にしない)
 }
 
 export class AppError extends Error {
@@ -203,7 +214,7 @@ function isPantry(name: string): boolean {
   return PANTRY.some((p) => key === normName(p) || key.includes(normName(p)));
 }
 
-export function cleanDishes(raw: unknown, items: Item[], scene: Scene, servings: number, max: number): NewRecipe[] {
+export function cleanDishes(raw: unknown, items: Item[], scene: Scene, servings: number, max: number, pantry: Seasoning[] = defaultSeasonings()): NewRecipe[] {
   const out: NewRecipe[] = [];
   for (const r of list(obj(raw).dishes)) {
     const o = obj(r);
@@ -217,8 +228,11 @@ export function cleanDishes(raw: unknown, items: Item[], scene: Scene, servings:
       const amount = str(go.amount, 20);
       // AI が「冷蔵庫にある」と言っても、実際の一覧で確かめる(ないものを「ある」と見せない)
       const hit = matchItem(name, items);
+      const seas = matchSeasoning(name, pantry);
       if (hit) ingredients.push({ name, amount, source: 'fridge', itemId: hit.id });
-      else if (go.source === 'pantry' || isPantry(name)) ingredients.push({ name, amount, source: 'pantry' });
+      // 切らしている調味料は「家にある」ことにせず、買い足し扱いにする
+      else if (seas?.out) ingredients.push({ name, amount, source: 'buy' });
+      else if (seas || go.source === 'pantry' || isPantry(name)) ingredients.push({ name, amount, source: 'pantry' });
       else ingredients.push({ name, amount, source: 'buy' });
       if (ingredients.length >= 20) break;
     }
@@ -330,6 +344,18 @@ async function staples(d: Deps): Promise<Staple[]> {
   const all = (await d.store.getKv<Record<string, Staple>>('staples')) ?? {};
   return Object.values(all).sort((a, b) => b.count - a.count).slice(0, 12);
 }
+/** その人の調味料リスト。まだ何も保存していなければ初期状態(全部ある・期限なし) */
+async function pantryList(d: Deps): Promise<Seasoning[]> {
+  const saved = await d.store.getKv<{ items: Seasoning[] }>('pantry');
+  if (saved?.items?.length) return saved.items;
+  return defaultSeasonings();
+}
+/** 調味料の名前が、リストのどれに当たるか(部分一致も見る) */
+function matchSeasoning(name: string, list: Seasoning[]): Seasoning | undefined {
+  const key = normName(name);
+  if (!key) return undefined;
+  return list.find((s) => normName(s.name) === key) ?? list.find((s) => key.includes(normName(s.name)) || normName(s.name).includes(key));
+}
 async function settings(d: Deps): Promise<Settings> {
   return { ...DEFAULT_SETTINGS, ...((await d.store.getKv<Settings>('settings')) ?? {}) };
 }
@@ -340,8 +366,25 @@ export async function handle(action: string, body: Record<string, unknown>, d: D
 
   switch (action) {
     case 'sync': {
-      const [items, set, stp, use] = await Promise.all([store.listItems(), settings(d), staples(d), usage(d)]);
-      return { items, settings: set, staples: stp, usage: use.value, limits, today: todayJst(d.now?.()) };
+      const [items, set, stp, use, pantry] = await Promise.all([store.listItems(), settings(d), staples(d), usage(d), pantryList(d)]);
+      return { items, settings: set, staples: stp, usage: use.value, limits, today: todayJst(d.now?.()), pantry };
+    }
+
+    case 'pantry_set': {
+      // 調味料タブの内容を丸ごと保存する(調味料は数が少ないので一括でよい)
+      const items: Seasoning[] = [];
+      const seen = new Set<string>();
+      for (const r of list(body.items)) {
+        const o = obj(r);
+        const name = str(o.name, 30);
+        if (!name || seen.has(normName(name))) continue;
+        seen.add(normName(name));
+        const exp = str(o.expiresOn, 10);
+        items.push({ name, out: o.out === true, expiresOn: /^\d{4}-\d{2}-\d{2}$/.test(exp) ? exp : null });
+        if (items.length >= 60) break;
+      }
+      await store.setKv('pantry', { items });
+      return { pantry: items };
     }
 
     case 'parse': {
@@ -405,8 +448,9 @@ export async function handle(action: string, body: Record<string, unknown>, d: D
       const recent = (await store.recentRecipes(12)).map((r) => r.title);
       const avoid = [...new Set([...list(body.avoid).map((v) => str(v, 40)).filter(Boolean), ...recent])].slice(0, 20);
       await countText(d);
-      const req = prompts.suggest({ scene, items, settings: set, avoid: dish ? [] : avoid, dish, buy: str(body.buy, 20) || undefined });
-      const dishes = cleanDishes(await ai.json(req.parts, req.schema), items, scene, set.servings, dish ? 1 : 3);
+      const pantry = await pantryList(d);
+      const req = prompts.suggest({ scene, items, settings: set, avoid: dish ? [] : avoid, dish, buy: str(body.buy, 20) || undefined, pantry });
+      const dishes = cleanDishes(await ai.json(req.parts, req.schema), items, scene, set.servings, dish ? 1 : 3, pantry);
       if (!dishes.length) throw new AppError('ai_empty', 'うまく提案を作れませんでした。もう一度お試しください。', 502);
       return { recipes: await store.saveRecipes(dishes) };
     }
@@ -441,7 +485,7 @@ export async function handle(action: string, body: Record<string, unknown>, d: D
       const cached = await store.getKv<{ key: string; ideas: ShoppingIdea[] }>('shopping');
       if (cached?.key === key && !body.fresh) return { ideas: cached.ideas };
       await countText(d);
-      const req = prompts.shopping({ items, settings: await settings(d) });
+      const req = prompts.shopping({ items, settings: await settings(d), pantry: await pantryList(d) });
       const ideas = cleanIdeas(await ai.json(req.parts, req.schema));
       await store.setKv('shopping', { key, ideas });
       return { ideas };
