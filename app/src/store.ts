@@ -1,7 +1,7 @@
 // アプリの状態と、中継サーバーとのやりとり。
 // 画面はいつも手元の状態をすぐに描き、サーバーとの同期は裏で行う(押してから待たせない)。
 import { useSyncExternalStore } from 'react';
-import { addDays, daysBetween, DEFAULT_SETTINGS, todayJst } from '../../supabase/functions/api/core.ts';
+import { addDays, daysBetween, DEFAULT_SETTINGS, SCENES, todayJst } from '../../supabase/functions/api/core.ts';
 import type { Item, Limits, NewItem, Recipe, Scene, Settings, ShoppingIdea, Staple, Usage } from '../../supabase/functions/api/core.ts';
 
 export type { Item, NewItem, Recipe, Scene, Settings, ShoppingIdea, Staple };
@@ -427,7 +427,10 @@ export async function loadScene(scene: Scene, another = false, withImages = true
   if (state.sceneLoading[scene]) return;
   if (!another && batchFor(state, scene)) return;
   if (!state.items.length) return;
-  const avoid = another ? (batchFor(state, scene) ?? []).map((r) => r.title) : [];
+  // ほかの場面で出している料理とはタイトルがかぶらないようにする
+  // (「つかれた日」と「お弁当」で同じレシピが出る、という声への対策)
+  const otherTitles = SCENES.filter((sc) => sc !== scene).flatMap((sc) => (batchFor(state, sc) ?? []).map((r) => r.title));
+  const avoid = [...new Set([...(another ? (batchFor(state, scene) ?? []).map((r) => r.title) : []), ...otherTitles])];
   set({ sceneLoading: { ...state.sceneLoading, [scene]: true }, sceneError: { ...state.sceneError, [scene]: undefined } });
   try {
     await settled();

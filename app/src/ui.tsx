@@ -1,5 +1,6 @@
 // 画面の部品(アイコン、下から出るシート、期限の印、料理写真、お知らせ)と、画面の行き来。
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { createPortal } from 'react-dom';
 import type { ReactNode } from 'react';
 import { daysBetween } from '../../supabase/functions/api/core.ts';
 import { closeToast, daysLeft, loadImage, useStore } from './store.ts';
@@ -187,7 +188,10 @@ export function Sheet({ title, onClose, children, footer }: { title: string; onC
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
-  return (
+  // シートはスクロールする画面の中ではなく、body 直下に出す。
+  // 中に入れたままだと、端末によっては一覧のスクロールや下のタブに隠れて、
+  // 下部のボタン(「冷蔵庫に入れる」など)が押せなくなることがあるため。
+  return createPortal(
     <div className="sheet-wrap" role="dialog" aria-modal="true" aria-label={title}>
       <button className="sheet-back" aria-label="閉じる" onClick={onClose} />
       <div className="sheet">
@@ -200,7 +204,8 @@ export function Sheet({ title, onClose, children, footer }: { title: string; onC
         <div className="sheet-body">{children}</div>
         {footer && <div className="sheet-foot">{footer}</div>}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

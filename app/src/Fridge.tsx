@@ -46,6 +46,7 @@ export function Fridge() {
   const [mode, setMode] = useState<AddMode | null>(null);
   const [shot, setShot] = useState<{ file: File; kind: 'receipt' | 'photo' } | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
+  const [resetting, setResetting] = useState(false);
   const receiptInput = useRef<HTMLInputElement>(null);
   const photoInput = useRef<HTMLInputElement>(null);
 
@@ -107,28 +108,33 @@ export function Fridge() {
           <p>買ってきたものを、上の4つのどれかで入れてください。レシートを撮るのがいちばん早く済みます。</p>
         </div>
       ) : (
-        groups.map((g) => (
-          <section key={g.title} className="group">
-            <h2>{g.title}</h2>
-            <ul className="rows">
-              {stack(g.list).map(({ item: i, count }) => (
-                <li key={i.id}>
-                  <button className="row" onClick={() => setEditing(i.id)}>
-                    <Ring item={i} />
-                    <span className="row-main">
-                      <span className="row-name">
-                        {i.name}
-                        {count > 1 && <span className="times">×{count}</span>}
+        <>
+          {groups.map((g) => (
+            <section key={g.title} className="group">
+              <h2>{g.title}</h2>
+              <ul className="rows">
+                {stack(g.list).map(({ item: i, count }) => (
+                  <li key={i.id}>
+                    <button className="row" onClick={() => setEditing(i.id)}>
+                      <Ring item={i} />
+                      <span className="row-main">
+                        <span className="row-name">
+                          {i.name}
+                          {count > 1 && <span className="times">×{count}</span>}
+                        </span>
+                        <span className={`left left-${leftTone(daysLeft(i))}`}>{leftLabel(daysLeft(i))}</span>
                       </span>
-                      <span className={`left left-${leftTone(daysLeft(i))}`}>{leftLabel(daysLeft(i))}</span>
-                    </span>
-                    <Icon name="right" size={18} />
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </section>
-        ))
+                      <Icon name="right" size={18} />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ))}
+          <button className="danger-link" onClick={() => setResetting(true)}>
+            食材を全部リセット
+          </button>
+        </>
       )}
 
       {mode && (
@@ -143,7 +149,33 @@ export function Fridge() {
         />
       )}
       {editingItem && <ItemSheet item={editingItem} onClose={() => setEditing(null)} />}
+      {resetting && <ResetSheet items={items} onClose={() => setResetting(false)} />}
     </div>
+  );
+}
+
+/** 冷蔵庫を空にする(まちがえても「元に戻す」で戻せる) */
+function ResetSheet({ items, onClose }: { items: Item[]; onClose: () => void }) {
+  return (
+    <Sheet
+      title="全部リセットしますか?"
+      onClose={onClose}
+      footer={
+        <button
+          className="btn btn-danger"
+          onClick={() => {
+            const gone = items;
+            removeItems(gone.map((i) => i.id));
+            toast(`${gone.length}品を全部出しました`, { label: '元に戻す', run: () => restoreItems(gone) });
+            onClose();
+          }}
+        >
+          全部出す
+        </button>
+      }
+    >
+      <p className="hint">冷蔵庫の{items.length}品を、すべて出します。まちがえたときは、直後に出る「元に戻す」で戻せます。</p>
+    </Sheet>
   );
 }
 
@@ -443,6 +475,10 @@ function AddOne({ onAdd }: { onAdd: (name: string) => void }) {
 // ───────── 1つを直す ─────────
 
 function ItemSheet({ item, onClose }: { item: Item; onClose: () => void }) {
+  const all = useStore((s) => s.items);
+  // 一覧で1つにまとめて見せている、同じ名前・同じ期限の分もまとめて扱う
+  const mates = all.filter((i) => normName(i.name) === normName(item.name) && i.expiresOn === item.expiresOn);
+  const count = Math.max(1, mates.length);
   const days = Math.max(0, daysLeft(item));
   const quick: [string, number][] = [
     ['今日', 0],
@@ -450,9 +486,29 @@ function ItemSheet({ item, onClose }: { item: Item; onClose: () => void }) {
     ['1週間', 7],
     ['2週間', 14],
   ];
+  const useAll = () => {
+    const gone = mates.length ? mates : [item];
+    removeItems(gone.map((i) => i.id));
+    toast(`${item.name}を使い切りました`, { label: '元に戻す', run: () => restoreItems(gone) });
+    onClose();
+  };
+  const useHalf = () => {
+    // 量そのものは管理していないので、1つだけのときは「半分残っている」扱いで残す。
+    // 2つ以上あるときは、半分の個数を出す
+    if (count <= 1) {
+      toast(`${item.name}は半分残っているので、そのままにしておきます`);
+      onClose();
+      return;
+    }
+    const n = Math.max(1, Math.round(count / 2));
+    const gone = mates.slice(0, n);
+    removeItems(gone.map((i) => i.id));
+    toast(`${item.name}を半分使いました(残り${count - n}つ)`, { label: '元に戻す', run: () => restoreItems(gone) });
+    onClose();
+  };
   return (
     <Sheet
-      title={item.name}
+      title={count > 1 ? `${item.name} ×${count}` : item.name}
       onClose={onClose}
       footer={
         <button
@@ -476,6 +532,16 @@ function ItemSheet({ item, onClose }: { item: Item; onClose: () => void }) {
           </button>
         ))}
       </div>
+      <h3 className="sheet-sub">使ったとき</h3>
+      <div className="use-row">
+        <button className="btn btn-line" onClick={useHalf}>
+          半分使った
+        </button>
+        <button className="btn" onClick={useAll}>
+          全部使った
+        </button>
+      </div>
+      <p className="hint">{count > 1 ? `同じものが${count}つあるので、「全部使った」で${count}つとも出します。` : '半分使ったときは、残り半分としてそのまま残ります。'}</p>
     </Sheet>
   );
 }

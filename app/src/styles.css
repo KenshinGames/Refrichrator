@@ -608,9 +608,15 @@ ol {
 /* ───────── 冷蔵庫 ───────── */
 
 .add-panel {
+  /* 一覧をスクロールしても、足すボタンが画面から消えないように上部に留める */
+  position: sticky;
+  top: calc(var(--top) + 8px);
+  z-index: 4;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
+  padding: 6px 0 10px;
+  background: linear-gradient(to bottom, var(--bg) 78%, transparent);
 }
 .add-panel button {
   min-width: 0;
@@ -918,6 +924,19 @@ button.row:active {
   flex: none;
   padding: 10px var(--pad) calc(14px + var(--bottom));
 }
+.sheet-sub {
+  margin-top: 24px;
+  font-size: 15px;
+  font-weight: 600;
+}
+.use-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+.use-row .btn {
+  flex: 1;
+}
 
 /* ───────── 提案 ───────── */
 
@@ -1215,11 +1234,21 @@ button.dish:active {
   position: sticky;
   z-index: 3;
   bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
   padding: 12px var(--pad) calc(14px + var(--bottom));
   background: var(--glass);
   -webkit-backdrop-filter: saturate(180%) blur(22px);
   backdrop-filter: saturate(180%) blur(22px);
   border-top: 1px solid var(--hair);
+}
+.dock .btn {
+  flex: 1;
+}
+.dock .round {
+  background: var(--surface);
+  box-shadow: var(--shadow);
 }
 
 /* ───────── 買い物 ───────── */

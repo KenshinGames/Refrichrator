@@ -227,6 +227,9 @@ function RecipeBody({ recipe }: { recipe: Recipe }) {
       </div>
 
       <div className="dock">
+        <button className="round" aria-label="もどる" onClick={() => back('/')}>
+          <Icon name="left" size={22} />
+        </button>
         {recipe.cookedAt ? (
           <button className="btn btn-done" onClick={() => setAsking(true)}>
             <Icon name="check" size={20} />
