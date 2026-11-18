@@ -47,6 +47,7 @@ export function Fridge() {
   const [shot, setShot] = useState<{ file: File; kind: 'receipt' | 'photo' } | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
   const [resetting, setResetting] = useState(false);
+  const [openSwipe, setOpenSwipe] = useState<string | null>(null); // 左スワイプで「出す」が出ている行
   const receiptInput = useRef<HTMLInputElement>(null);
   const photoInput = useRef<HTMLInputElement>(null);
 
@@ -115,17 +116,19 @@ export function Fridge() {
               <ul className="rows">
                 {stack(g.list).map(({ item: i, count }) => (
                   <li key={i.id}>
-                    <button className="row" onClick={() => setEditing(i.id)}>
-                      <Ring item={i} />
-                      <span className="row-main">
-                        <span className="row-name">
-                          {i.name}
-                          {count > 1 && <span className="times">×{count}</span>}
-                        </span>
-                        <span className={`left left-${leftTone(daysLeft(i))}`}>{leftLabel(daysLeft(i))}</span>
-                      </span>
-                      <Icon name="right" size={18} />
-                    </button>
+                    <SwipeRow
+                      item={i}
+                      count={count}
+                      open={openSwipe === i.id}
+                      setOpen={(v) => setOpenSwipe(v ? i.id : null)}
+                      closeOthers={() => {
+                        if (openSwipe && openSwipe !== i.id) setOpenSwipe(null);
+                      }}
+                      onTap={() => {
+                        setOpenSwipe(null);
+                        setEditing(i.id);
+                      }}
+                    />
                   </li>
                 ))}
               </ul>
@@ -150,6 +153,128 @@ export function Fridge() {
       )}
       {editingItem && <ItemSheet item={editingItem} onClose={() => setEditing(null)} />}
       {resetting && <ResetSheet items={items} onClose={() => setResetting(false)} />}
+    </div>
+  );
+}
+
+const SWIPE_W = 84; // 左スワイプで出てくる「出す」ボタンの幅
+
+/**
+ * 一覧の1行。左にスライドすると「出す」が出て、押すと冷蔵庫から出す(メールアプリと同じ動き)。
+ * 半分以上スライドしたら、そのまま離しても出す。タップは今まで通り詳細を開く。
+ * 縦のスクロールとは競合させない(横の動きが大きいときだけスワイプとして扱う)。
+ */
+function SwipeRow({
+  item,
+  count,
+  open,
+  setOpen,
+  closeOthers,
+  onTap,
+}: {
+  item: Item;
+  count: number;
+  open: boolean;
+  setOpen: (v: boolean) => void;
+  closeOthers: () => void;
+  onTap: () => void;
+}) {
+  const all = useStore((s) => s.items);
+  const [dx, setDx] = useState(0);
+  const [drag, setDrag] = useState(false);
+  const startRef = useRef<{ x: number; y: number; mode: '' | 'h' | 'v'; base: number } | null>(null);
+  const movedRef = useRef(false);
+  const frontRef = useRef<HTMLButtonElement>(null);
+
+  // 一覧で1つにまとめて見せている、同じ名前・同じ期限の分もまとめて出す
+  const mates = all.filter((i) => normName(i.name) === normName(item.name) && i.expiresOn === item.expiresOn);
+  const remove = () => {
+    const gone = mates.length ? mates : [item];
+    removeItems(gone.map((i) => i.id));
+    toast(`${item.name}を出しました`, { label: '元に戻す', run: () => restoreItems(gone) });
+    setOpen(false);
+  };
+
+  const base = open ? -SWIPE_W : 0;
+  const tx = drag ? Math.max(-(frontRef.current?.clientWidth ?? 360), Math.min(0, base + dx)) : base;
+
+  const onPointerDown = (e: React.PointerEvent) => {
+    closeOthers();
+    startRef.current = { x: e.clientX, y: e.clientY, mode: '', base };
+    movedRef.current = false;
+  };
+  const onPointerMove = (e: React.PointerEvent) => {
+    const s = startRef.current;
+    if (!s) return;
+    const mx = e.clientX - s.x;
+    const my = e.clientY - s.y;
+    if (!s.mode) {
+      if (Math.abs(mx) < 8 && Math.abs(my) < 8) return;
+      s.mode = Math.abs(mx) > Math.abs(my) ? 'h' : 'v';
+      if (s.mode === 'h') {
+        setDrag(true);
+        try {
+          frontRef.current?.setPointerCapture(e.pointerId);
+        } catch {
+          // つかめなくても、動き自体は続ける
+        }
+      }
+    }
+    if (s.mode === 'h') {
+      setDx(mx);
+      if (Math.abs(mx) > 6) movedRef.current = true;
+    }
+  };
+  const endDrag = (e: React.PointerEvent) => {
+    const s = startRef.current;
+    startRef.current = null;
+    setDrag(false);
+    if (!s || s.mode !== 'h') return;
+    const final = s.base + (e.clientX - s.x);
+    const w = frontRef.current?.clientWidth ?? 360;
+    setDx(0);
+    if (final < -w * 0.45) {
+      remove();
+      return;
+    }
+    setOpen(final < -40);
+  };
+
+  return (
+    <div className="swipe">
+      <button className="swipe-del" aria-label={`${item.name}を冷蔵庫から出す`} tabIndex={open ? 0 : -1} onClick={remove}>
+        出す
+      </button>
+      <button
+        ref={frontRef}
+        className="row swipe-front"
+        style={{ transform: `translateX(${tx}px)`, transition: drag ? 'none' : 'transform 0.18s ease-out' }}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={endDrag}
+        onPointerCancel={endDrag}
+        onClick={() => {
+          if (movedRef.current) {
+            movedRef.current = false;
+            return;
+          }
+          if (open) {
+            setOpen(false);
+            return;
+          }
+          onTap();
+        }}
+      >
+        <Ring item={item} />
+        <span className="row-main">
+          <span className="row-name">
+            {item.name}
+            {count > 1 && <span className="times">×{count}</span>}
+          </span>
+          <span className={`left left-${leftTone(daysLeft(item))}`}>{leftLabel(daysLeft(item))}</span>
+        </span>
+        <Icon name="right" size={18} />
+      </button>
     </div>
   );
 }

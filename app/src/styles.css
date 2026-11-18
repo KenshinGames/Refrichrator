@@ -925,6 +925,31 @@ button.row:active {
   flex: none;
   padding: 10px var(--pad) calc(14px + var(--bottom));
 }
+/* 左スワイプで「出す」を出す行(メールアプリと同じ動き) */
+.swipe {
+  position: relative;
+  overflow: hidden;
+}
+.swipe-del {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 84px;
+  display: grid;
+  place-items: center;
+  background: var(--hot);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+.swipe-front {
+  position: relative;
+  background: var(--surface);
+  touch-action: pan-y;
+  will-change: transform;
+}
 .sheet-sub {
   margin-top: 24px;
   font-size: 15px;
