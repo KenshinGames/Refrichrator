@@ -1,6 +1,6 @@
 // 提案の画面と、レシピの画面。
 import { useEffect, useState } from 'react';
-import { batchFor, cooked, daysLeft, ideaKey, loadIdea, loadScene, toast, useStore } from './store.ts';
+import { batchFor, cooked, daysLeft, ideaKey, loadIdea, loadScene, toast, toggleFav, togglePlan, useStore } from './store.ts';
 import type { Item, Recipe, Scene } from './store.ts';
 import { back, go, Icon, Photo, Sheet } from './ui.tsx';
 
@@ -78,7 +78,7 @@ function soonUsed(recipe: Recipe, items: Item[]): Item[] {
   return items.filter((i) => ids.has(i.id) && daysLeft(i) <= 3);
 }
 
-function DishCard({ recipe, items }: { recipe: Recipe; items: Item[] }) {
+export function DishCard({ recipe, items }: { recipe: Recipe; items: Item[] }) {
   const buy = recipe.ingredients.filter((i) => i.source === 'buy');
   const soon = soonUsed(recipe, items);
   return (
@@ -158,6 +158,8 @@ const SOURCE_LABEL = { fridge: '冷蔵庫から', buy: '買い足す', pantry: '
 
 function RecipeBody({ recipe }: { recipe: Recipe }) {
   const items = useStore((s) => s.items);
+  const planned = useStore((s) => s.plan.includes(recipe.id));
+  const fav = useStore((s) => s.favs.includes(recipe.id));
   const [asking, setAsking] = useState(false);
   const [done, setDone] = useState<number[]>([]);
   useWakeLock();
@@ -224,20 +226,53 @@ function RecipeBody({ recipe }: { recipe: Recipe }) {
           似たレシピをネットで見る
           <Icon name="out" size={18} />
         </a>
+
+        {planned && (
+          <button
+            className="danger-link"
+            onClick={() => {
+              togglePlan(recipe.id);
+              toast('「作る」から外しました');
+            }}
+          >
+            作るつもりを取り消す
+          </button>
+        )}
       </div>
 
       <div className="dock">
         <button className="round" aria-label="もどる" onClick={() => back('/')}>
           <Icon name="left" size={22} />
         </button>
-        {recipe.cookedAt ? (
+        <button
+          className={`round round-fav ${fav ? 'on' : ''}`}
+          aria-label={fav ? 'お気に入りから外す' : 'お気に入りに追加'}
+          aria-pressed={fav}
+          onClick={() => {
+            toggleFav(recipe.id);
+            toast(fav ? 'お気に入りから外しました' : 'お気に入りに入れました');
+          }}
+        >
+          <Icon name="star" size={22} />
+        </button>
+        {planned ? (
+          <button className="btn" onClick={() => setAsking(true)}>
+            作った！
+          </button>
+        ) : recipe.cookedAt ? (
           <button className="btn btn-done" onClick={() => setAsking(true)}>
             <Icon name="check" size={20} />
             作りました
           </button>
         ) : (
-          <button className="btn" onClick={() => setAsking(true)}>
-            作った！
+          <button
+            className="btn"
+            onClick={() => {
+              togglePlan(recipe.id);
+              toast('「作る」に入れました');
+            }}
+          >
+            作る
           </button>
         )}
       </div>
@@ -328,6 +363,42 @@ export function RecipeScreen({ id }: { id: string }) {
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+/** 「作る」タブ:作るつもりのレシピと、お気に入りを並べる。開き直してもすぐ開ける */
+export function PlanScreen() {
+  const items = useStore((s) => s.items);
+  const planIds = useStore((s) => s.plan.join(','));
+  const favIds = useStore((s) => s.favs.join(','));
+  const recipes = useStore((s) => s.recipes);
+  const plan = planIds ? planIds.split(',').map((id) => recipes[id]).filter(Boolean) : [];
+  const favs = favIds ? favIds.split(',').map((id) => recipes[id]).filter(Boolean).filter((r) => !plan.includes(r)) : [];
+  return (
+    <div className="screen">
+      <header className="title-row">
+        <h1>作る</h1>
+        {plan.length + favs.length > 0 && <span className="count">{plan.length + favs.length}品</span>}
+      </header>
+
+      <section className="plan-sec">
+        <h2>作るつもり</h2>
+        {plan.length === 0 ? (
+          <p className="quiet">まだありません。レシピで「作る」を押すと、ここに並びます。</p>
+        ) : (
+          plan.map((r) => <DishCard key={r.id} recipe={r} items={items} />)
+        )}
+      </section>
+
+      <section className="plan-sec">
+        <h2>お気に入り</h2>
+        {favs.length === 0 ? (
+          <p className="quiet">まだありません。レシピの星ボタンで追加できます。</p>
+        ) : (
+          favs.map((r) => <DishCard key={r.id} recipe={r} items={items} />)
+        )}
+      </section>
     </div>
   );
 }

@@ -1,6 +1,6 @@
 // 全体の組み立て:扉、ホーム、買い物、設定、下のタブ。
 import { useEffect, useState } from 'react';
-import { IdeaScreen, RecipeScreen, SCENE_INFO, SceneScreen } from './Cook.tsx';
+import { IdeaScreen, PlanScreen, RecipeScreen, SCENE_INFO, SceneScreen } from './Cook.tsx';
 import { Fridge, stack } from './Fridge.tsx';
 import { batchFor, daysLeft, deleteAccount, lastName, leave, likelyScene, loadShopping, saveSettings, signIn, useStore } from './store.ts';
 import type { Scene } from './store.ts';
@@ -15,7 +15,7 @@ export function App() {
   useVisualViewport();
   const signedIn = useStore((s) => !!s.session);
   const route = useRoute();
-  const tab = route.name === 'home' || route.name === 'fridge' || route.name === 'shop' ? route.name : null;
+  const tab = route.name === 'home' || route.name === 'fridge' || route.name === 'plan' || route.name === 'shop' ? route.name : null;
   const key = route.name + ('scene' in route ? route.scene : '') + ('id' in route ? route.id : '') + ('dish' in route ? route.dish : '');
 
   return (
@@ -25,6 +25,7 @@ export function App() {
           <main className={tab ? 'stage stage-tabs' : 'stage'} key={key}>
             {route.name === 'home' && <Home />}
             {route.name === 'fridge' && <Fridge />}
+            {route.name === 'plan' && <PlanScreen />}
             {route.name === 'shop' && <Shop />}
             {route.name === 'settings' && <Settings />}
             {route.name === 'scene' && <SceneScreen scene={route.scene} />}
@@ -37,6 +38,7 @@ export function App() {
                 [
                   ['home', '/', 'ホーム', 'home'],
                   ['fridge', '/fridge', '冷蔵庫', 'fridge'],
+                  ['plan', '/plan', '作る', 'plate'],
                   ['shop', '/shop', '買い物', 'basket'],
                 ] as const
               ).map(([name, path, label, icon]) => (

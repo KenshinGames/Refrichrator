@@ -38,6 +38,8 @@ export interface State {
   usage: Usage;
   limits: Limits;
   recipes: Record<string, Recipe>;
+  plan: string[]; // 「作る」を押したレシピ(開き直してすぐ開けるように)
+  favs: string[]; // お気に入りのレシピ
   batches: Partial<Record<Scene, Batch>>;
   sceneLoading: Partial<Record<Scene, boolean>>;
   sceneError: Partial<Record<Scene, string>>;
@@ -60,6 +62,8 @@ let state: State = {
   usage: { images: 0, texts: 0 },
   limits: { images: 60, allImages: 180, texts: 600 },
   recipes: {},
+  plan: [],
+  favs: [],
   batches: {},
   sceneLoading: {},
   sceneError: {},
@@ -99,10 +103,11 @@ function schedulePersist(): void {
   if (persistTimer) return;
   persistTimer = window.setTimeout(() => {
     persistTimer = undefined;
-    // レシピは新しいものから30件だけ残す
+    // レシピは新しいものから30件だけ残す(「作る」「お気に入り」に入れたものは消さない)
+    const savedIds = new Set([...state.plan, ...state.favs]);
     const recent = Object.values(state.recipes)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-      .slice(0, 30)
+      .filter((r, i) => i < 30 || savedIds.has(r.id))
       .map((r) => (r.imageUrl?.startsWith('data:') ? { ...r, imageUrl: null } : r));
     const keep = {
       items: state.items,
@@ -110,6 +115,8 @@ function schedulePersist(): void {
       settings: state.settings,
       usage: state.usage,
       limits: state.limits,
+      plan: state.plan,
+      favs: state.favs,
       recipes: Object.fromEntries(recent.map((r) => [r.id, r])),
       batches: state.batches,
       shopping: state.shopping,
@@ -397,8 +404,18 @@ export function restoreItems(items: Item[]): void {
   const day = today();
   addItems(items.map((i) => ({ name: i.name, category: i.category, days: Math.max(1, daysBetween(day, i.expiresOn)) })));
 }
+/** 「作る」に入れる/出す */
+export function togglePlan(id: string): void {
+  set({ plan: state.plan.includes(id) ? state.plan.filter((x) => x !== id) : [id, ...state.plan] });
+}
+/** お気に入りに入れる/出す */
+export function toggleFav(id: string): void {
+  set({ favs: state.favs.includes(id) ? state.favs.filter((x) => x !== id) : [id, ...state.favs] });
+}
+
 export function cooked(recipeId: string, usedUp: string[]): void {
   set({
+    plan: state.plan.filter((x) => x !== recipeId),
     items: state.items.filter((i) => !usedUp.includes(i.id)),
     recipes: state.recipes[recipeId]
       ? { ...state.recipes, [recipeId]: { ...state.recipes[recipeId], cookedAt: new Date().toISOString() } }

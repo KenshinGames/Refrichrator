@@ -11,6 +11,7 @@ import type { Item, Recipe, Scene } from './store.ts';
 export type Route =
   | { name: 'home' }
   | { name: 'fridge' }
+  | { name: 'plan' }
   | { name: 'shop' }
   | { name: 'settings' }
   | { name: 'scene'; scene: Scene }
@@ -20,6 +21,7 @@ export type Route =
 function parseRoute(hash: string): Route {
   const p = hash.replace(/^#\/?/, '').split('/').map(decodeURIComponent);
   if (p[0] === 'fridge') return { name: 'fridge' };
+  if (p[0] === 'plan') return { name: 'plan' };
   if (p[0] === 'shop') return { name: 'shop' };
   if (p[0] === 'settings') return { name: 'settings' };
   if (p[0] === 's' && (p[1] === 'tired' || p[1] === 'holiday' || p[1] === 'bento')) return { name: 'scene', scene: p[1] };
