@@ -321,6 +321,7 @@ function applySync(r: SyncResult): void {
     synced: true,
     ...(r.name && state.session ? { session: { ...state.session, name: r.name } } : {}),
   });
+  prewarmSoon(600);
 }
 
 /** 今いちばん開きそうな場面(平日は「つかれた日」、土日は「休みの日」) */
@@ -328,26 +329,32 @@ export function likelyScene(now = new Date()): Scene {
   const day = now.getDay();
   return day === 0 || day === 6 ? 'holiday' : 'tired';
 }
+let prewarmTimer: number | undefined;
 let prewarming = false;
 /**
- * ホームを開いたときに、3つの場面すべての提案(各3品)を裏で確定させておく。
- * 食材を登録するたびにAIを呼ぶと使いすぎるので、呼ぶきっかけはホームの表示だけにする。
- * 冷蔵庫の中身が変わっていなければ loadScene は何もしないので、ホームを行き来しても料金はかからない。
- * 場面どうしで料理名がかぶらないよう、開きそうな場面から順番に用意する。
- * 写真はお金がかかるので作らない(場面を開いたときに作る)。
+ * 提案を裏で先に用意しておく(開いたときにすぐ出せるように)。
+ * きっかけは「同期の直後」と「食材の変更が一段落した直後」。
+ * 用意するのは、開きそうな場面(平日は「つかれた日」、土日は「休みの日」)から順に3場面すべて(各3品、文章だけ)。
+ * 場面どうしで料理名がかぶらないよう、順番に1つずつ用意する。
+ * 冷蔵庫の中身が変わっていなければ loadScene は何もしないので、呼ばれても料金はかからない。
+ * 写真はお金がかかるので、実際にその場面を開いたときに作る。
  */
-export async function prewarmScenes(): Promise<void> {
-  if (prewarming) return;
-  if (!state.session || !state.synced || !state.items.length || pending > 0) return;
-  prewarming = true;
-  try {
+function prewarmSoon(delay: number): void {
+  window.clearTimeout(prewarmTimer);
+  prewarmTimer = window.setTimeout(() => {
+    if (document.visibilityState !== 'visible' || !state.session || !state.synced || pending > 0 || prewarming) return;
+    prewarming = true;
     const first = likelyScene();
-    for (const scene of [first, ...SCENES.filter((s) => s !== first)]) {
-      await loadScene(scene, false, false);
-    }
-  } finally {
-    prewarming = false;
-  }
+    void (async () => {
+      try {
+        for (const scene of [first, ...SCENES.filter((s) => s !== first)]) {
+          await loadScene(scene, false, false);
+        }
+      } finally {
+        prewarming = false;
+      }
+    })();
+  }, delay);
 }
 export async function sync(): Promise<void> {
   if (pending > 0) return;
@@ -370,9 +377,9 @@ function mutate(run: () => Promise<{ items: Item[]; staples?: Staple[] }>): Prom
       const r = await run();
       pending--;
       // 次の変更が待っている間は、手元の見た目を優先する
-      // (提案の先回りはしない。ホームを開いたときにまとめて用意する)
       if (pending === 0) {
         set({ items: sortItems(r.items), ...(r.staples ? { staples: r.staples } : {}) });
+        prewarmSoon(2500);
       }
     } catch (e) {
       pending--;
