@@ -160,9 +160,9 @@ export function Fridge() {
 const SWIPE_W = 84; // 左スワイプで出てくる「出す」ボタンの幅
 
 /**
- * 一覧の1行。左にスライドすると「出す」が出て、押すと冷蔵庫から出す(メールアプリと同じ動き)。
- * 半分以上スライドしたら、そのまま離しても出す。タップは今まで通り詳細を開く。
- * 縦のスクロールとは競合させない(横の動きが大きいときだけスワイプとして扱う)。
+ * 一覧の1行。左にスライドすると「削除」が出て、押したときだけ消す(メールアプリと同じ動き)。
+ * スライドしただけでは絶対に消えない(スクロールのつもりで触って消える事故を防ぐ)。
+ * 縦のスクロールとは競合させない(横の動きが縦の1.6倍を超えたときだけスワイプとして扱う)。
  */
 function SwipeRow({
   item,
@@ -196,7 +196,8 @@ function SwipeRow({
   };
 
   const base = open ? -SWIPE_W : 0;
-  const tx = drag ? Math.max(-(frontRef.current?.clientWidth ?? 360), Math.min(0, base + dx)) : base;
+  // 行は「削除」ボタンの幅までしか動かさない(大きく引いても、それ以上は行かない)
+  const tx = drag ? Math.max(-SWIPE_W, Math.min(0, base + dx)) : base;
 
   const onPointerDown = (e: React.PointerEvent) => {
     closeOthers();
@@ -209,8 +210,9 @@ function SwipeRow({
     const mx = e.clientX - s.x;
     const my = e.clientY - s.y;
     if (!s.mode) {
-      if (Math.abs(mx) < 8 && Math.abs(my) < 8) return;
-      s.mode = Math.abs(mx) > Math.abs(my) ? 'h' : 'v';
+      if (Math.abs(mx) < 10 && Math.abs(my) < 10) return;
+      // 横の動きが縦の1.6倍を超えたときだけスワイプ。少し斜めに触ったくらいでは反応しない
+      s.mode = Math.abs(mx) > Math.abs(my) * 1.6 ? 'h' : 'v';
       if (s.mode === 'h') {
         setDrag(true);
         try {
@@ -230,14 +232,16 @@ function SwipeRow({
     startRef.current = null;
     setDrag(false);
     if (!s || s.mode !== 'h') return;
-    const final = s.base + (e.clientX - s.x);
-    const w = frontRef.current?.clientWidth ?? 360;
+    const final = Math.max(-SWIPE_W, Math.min(0, s.base + (e.clientX - s.x)));
     setDx(0);
-    if (final < -w * 0.45) {
-      remove();
-      return;
-    }
-    setOpen(final < -40);
+    // 消すのは「削除」ボタンを押したときだけ。ここでは出しておくか戻すかだけ決める
+    setOpen(final < -SWIPE_W / 2);
+  };
+  const cancelDrag = () => {
+    // スクロールに割り込まれたときは何も変えずに戻す
+    startRef.current = null;
+    setDrag(false);
+    setDx(0);
   };
 
   return (
@@ -252,7 +256,7 @@ function SwipeRow({
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={endDrag}
-        onPointerCancel={endDrag}
+        onPointerCancel={cancelDrag}
         onClick={() => {
           if (movedRef.current) {
             movedRef.current = false;
