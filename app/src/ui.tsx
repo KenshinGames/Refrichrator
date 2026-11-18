@@ -95,6 +95,7 @@ const PATHS: Record<string, ReactNode> = {
     </>
   ),
   pen: <path d="M4.5 19.5l1-4L16.3 4.7a1.6 1.6 0 0 1 2.3 0l.7.7a1.6 1.6 0 0 1 0 2.3L8.5 18.5zM14.5 6.5l3 3" />,
+  grip: <path d="M4.5 7h15M4.5 12h15M4.5 17h15" />,
   bottle: (
     <>
       <rect x="9.7" y="2.7" width="4.6" height="2.4" rx="0.8" />

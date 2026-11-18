@@ -31,6 +31,54 @@ export function Pantry() {
     setPantry([...pantry, { name, out: false, expiresOn: null }]);
   };
 
+  // 並べ替え:左の三本線(グリップ)を掴んで上下にドラッグする
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
+  const [dragDy, setDragDy] = useState(0);
+  const dragRef = useRef<{ startY: number; step: number; moved: boolean } | null>(null);
+  const suppressClickRef = useRef(false);
+  const rowH = dragRef.current?.step ?? 0;
+  const targetIdx =
+    dragIdx === null || !rowH ? null : Math.max(0, Math.min(pantry.length - 1, dragIdx + Math.round(dragDy / rowH)));
+
+  const onGripDown = (e: React.PointerEvent, idx: number) => {
+    const li = (e.currentTarget as HTMLElement).closest('li');
+    const next = li?.nextElementSibling as HTMLElement | null;
+    const step = li ? (next ? next.offsetTop - li.offsetTop : li.offsetHeight) : 0;
+    dragRef.current = { startY: e.clientY, step: step || 57, moved: false };
+    setDragIdx(idx);
+    setDragDy(0);
+    try {
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    } catch {
+      // つかめなくても、動き自体は続ける
+    }
+  };
+  const onGripMove = (e: React.PointerEvent) => {
+    const d = dragRef.current;
+    if (!d || dragIdx === null) return;
+    const dy = e.clientY - d.startY;
+    if (Math.abs(dy) > 6) d.moved = true;
+    setDragDy(dy);
+  };
+  const onGripUp = () => {
+    const d = dragRef.current;
+    dragRef.current = null;
+    if (dragIdx !== null && targetIdx !== null && targetIdx !== dragIdx) {
+      const next = [...pantry];
+      const [moved] = next.splice(dragIdx, 1);
+      next.splice(targetIdx, 0, moved);
+      setPantry(next);
+    }
+    if (d?.moved) suppressClickRef.current = true;
+    setDragIdx(null);
+    setDragDy(0);
+  };
+  const onGripCancel = () => {
+    dragRef.current = null;
+    setDragIdx(null);
+    setDragDy(0);
+  };
+
   return (
     <div className="screen">
       <header className="title-row">
@@ -54,12 +102,39 @@ export function Pantry() {
         </div>
       )}
 
-      <ul className="rows pantry-rows">
-        {pantry.map((p) => {
+      <ul className={`rows pantry-rows ${dragIdx !== null ? 'drag-active' : ''}`}>
+        {pantry.map((p, i) => {
           const exp = expiryText(p);
+          let transform: string | undefined;
+          if (dragIdx !== null && targetIdx !== null && rowH) {
+            if (i === dragIdx) transform = `translateY(${dragDy}px)`;
+            else if (dragIdx < targetIdx && i > dragIdx && i <= targetIdx) transform = `translateY(${-rowH}px)`;
+            else if (dragIdx > targetIdx && i < dragIdx && i >= targetIdx) transform = `translateY(${rowH}px)`;
+          }
           return (
-            <li key={p.name}>
-              <div className="row pantry-row" onClick={() => setEditing(p.name)}>
+            <li key={p.name} className={i === dragIdx ? 'dragging' : ''} style={transform ? { transform } : undefined}>
+              <div
+                className="row pantry-row"
+                onClick={() => {
+                  if (suppressClickRef.current) {
+                    suppressClickRef.current = false;
+                    return;
+                  }
+                  setEditing(p.name);
+                }}
+              >
+                <span
+                  className="grip"
+                  role="button"
+                  aria-label={`${p.name}を並べ替え`}
+                  onPointerDown={(e) => onGripDown(e, i)}
+                  onPointerMove={onGripMove}
+                  onPointerUp={onGripUp}
+                  onPointerCancel={onGripCancel}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <Icon name="grip" size={20} />
+                </span>
                 <span className="row-main">
                   <span className="row-name">{p.name}</span>
                   <span className={`pantry-sub ${exp.hot ? 'hot' : ''}`}>{exp.text}</span>
