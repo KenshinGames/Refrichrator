@@ -245,7 +245,10 @@ export function Photo({ recipe, className = '' }: { recipe: Recipe; className?: 
           今月の写真は上限に達しました
         </span>
       ) : (
-        <span className="photo-note photo-making">盛り付けています</span>
+        <span className="photo-note photo-making">
+          盛り付けています
+          <span className="photo-wait-note">画像の表示までは15秒ほどかかります</span>
+        </span>
       )}
     </div>
   );

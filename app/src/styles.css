@@ -1083,6 +1083,10 @@ button.dish:active {
   color: var(--sub);
   text-align: center;
 }
+.photo-wait-note {
+  font-size: 12px;
+  font-weight: 400;
+}
 .photo-retry {
   display: flex;
   align-items: center;
