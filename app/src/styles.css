@@ -979,14 +979,9 @@ button.row:active {
 
 /* ───────── 調味料 ───────── */
 
-.pantry-add {
-  display: flex;
-  gap: 8px;
-  align-items: center;
+.pantry-add-open {
+  width: 100%;
   margin: 6px 0 12px;
-}
-.pantry-add .field {
-  flex: 1;
 }
 .chips {
   display: flex;

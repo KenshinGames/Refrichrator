@@ -1,6 +1,7 @@
 // 調味料の画面:「いつも家にある」前提にしてきた調味料を、在庫と賞味期限で管理する。
 // デフォルトは基本の調味料が全部「ある・賞味期限なし」で並ぶ。切らしたら「切らしてる」にすると、
 // レシピでは買い足し扱いになる(サーバー側の対応は次のデプロイから)。
+// 追加は「調味料を足す」ボタンから入力シートを開いて行う。
 import { useRef, useState } from 'react';
 import { addDays, daysBetween, normName, PANTRY, todayJst } from '../../supabase/functions/api/core.ts';
 import { setPantry, toast, useStore } from './store.ts';
@@ -17,28 +18,17 @@ function expiryText(p: Seasoning): { text: string; hot: boolean } {
 
 export function Pantry() {
   const pantry = useStore((s) => s.pantry);
-  const [adding, setAdding] = useState('');
+  const [addOpen, setAddOpen] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
-  const addInputRef = useRef<HTMLInputElement>(null);
   const missing = PANTRY.filter((name) => !pantry.some((p) => normName(p.name) === normName(name)));
   const editingItem = editing ? pantry.find((p) => p.name === editing) : undefined;
 
   const toggleOut = (name: string) => {
     setPantry(pantry.map((p) => (p.name === name ? { ...p, out: !p.out } : p)));
   };
-  const addName = (raw: string) => {
-    const name = raw.trim();
-    if (!name) {
-      // 空のまま押したときは、入力欄にフォーカスして「まず名前を入れる」ことが分かるようにする
-      addInputRef.current?.focus();
-      return;
-    }
-    if (pantry.some((p) => normName(p.name) === normName(name))) {
-      toast(`「${name}」はもう一覧にあります`);
-      return;
-    }
+  const addQuick = (name: string) => {
+    // 消した基本の調味料を戻すとき用(初期状態でそのまま足す)
     setPantry([...pantry, { name, out: false, expiresOn: null }]);
-    setAdding('');
   };
 
   return (
@@ -48,27 +38,15 @@ export function Pantry() {
       </header>
       <p className="lede">レシピは「家にある」前提で考えています。切らしたら「切らしてる」にしてください。</p>
 
-      <div className="pantry-add">
-        <input
-          ref={addInputRef}
-          className="field"
-          value={adding}
-          onChange={(e) => setAdding(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') addName(adding);
-          }}
-          placeholder="調味料を足す(例:ラー油)"
-          aria-label="足す調味料の名前"
-        />
-        <button className="btn btn-sub" onClick={() => addName(adding)}>
-          足す
-        </button>
-      </div>
+      <button className="btn btn-primary pantry-add-open" onClick={() => setAddOpen(true)}>
+        <Icon name="plus" size={18} />
+        調味料を足す
+      </button>
 
       {missing.length > 0 && (
         <div className="chips" aria-label="基本の調味料を戻す">
           {missing.map((name) => (
-            <button key={name} className="chip" onClick={() => addName(name)}>
+            <button key={name} className="chip" onClick={() => addQuick(name)}>
               <Icon name="plus" size={14} />
               {name}
             </button>
@@ -102,8 +80,77 @@ export function Pantry() {
         })}
       </ul>
 
+      {addOpen && <AddSheet onClose={() => setAddOpen(false)} />}
       {editingItem && <PantrySheet item={editingItem} onClose={() => setEditing(null)} />}
     </div>
+  );
+}
+
+/** 調味料を足す入力シート:名前・在庫・賞味期限をまとめて入れる */
+function AddSheet({ onClose }: { onClose: () => void }) {
+  const pantry = useStore((s) => s.pantry);
+  const [name, setName] = useState('');
+  const [out, setOut] = useState(false);
+  const [hasExp, setHasExp] = useState(false);
+  const [days, setDays] = useState(180);
+  const nameRef = useRef<HTMLInputElement>(null);
+
+  const add = () => {
+    const n = name.trim();
+    if (!n) {
+      // 空のまま押したときは、名前の入力欄にフォーカスして分かるようにする
+      nameRef.current?.focus();
+      return;
+    }
+    if (pantry.some((p) => normName(p.name) === normName(n))) {
+      toast(`「${n}」はもう一覧にあります`);
+      return;
+    }
+    setPantry([...pantry, { name: n, out, expiresOn: hasExp ? addDays(todayJst(), days) : null }]);
+    onClose();
+  };
+
+  return (
+    <Sheet
+      title="調味料を足す"
+      onClose={onClose}
+      footer={
+        <button className="btn btn-primary" onClick={add}>
+          追加する
+        </button>
+      }
+    >
+      <input
+        ref={nameRef}
+        className="field"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') add();
+        }}
+        placeholder="名前(例:ラー油)"
+        aria-label="調味料の名前"
+      />
+      <div className="sheet-row">
+        <span>在庫</span>
+        <button className={`stock ${out ? 'out' : ''}`} onClick={() => setOut((v) => !v)}>
+          {out ? '切らしてる' : 'ある'}
+        </button>
+      </div>
+      <div className="sheet-row">
+        <span>賞味期限</span>
+        {hasExp ? (
+          <button className="sec-link" onClick={() => setHasExp(false)}>
+            なしに戻す
+          </button>
+        ) : (
+          <button className="sec-link" onClick={() => setHasExp(true)}>
+            設定する
+          </button>
+        )}
+      </div>
+      {hasExp && <Stepper label="賞味期限までの日数" unit="日" min={0} max={365} value={days} onChange={setDays} />}
+    </Sheet>
   );
 }
 
