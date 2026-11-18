@@ -253,7 +253,7 @@ function RecipeBody({ recipe }: { recipe: Recipe }) {
             toast(fav ? 'お気に入りから外しました' : 'お気に入りに入れました');
           }}
         >
-          <Icon name="star" size={22} />
+          <Icon name={fav ? 'starFill' : 'star'} size={22} />
         </button>
         {planned ? (
           <button className="btn" onClick={() => setAsking(true)}>
