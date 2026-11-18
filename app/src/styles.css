@@ -1025,23 +1025,6 @@ button.dish:active {
   content: '・';
   margin: 0 -2px 0 -10px;
 }
-.dish-soon {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  margin-top: 8px;
-  font-size: 13px;
-  font-weight: 600;
-  line-height: 1.4;
-}
-.dish-soon::before {
-  content: '';
-  flex: none;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--warm);
-}
 .photo {
   position: relative;
   display: grid;
@@ -1072,12 +1055,19 @@ button.dish:active {
   background-size: 220% 100%;
   animation: shimmer 1.5s linear infinite;
 }
-/* 写真の左上のバッジ:家にあるものだけで作れるか、買い足しが要るか */
-.photo-badge {
+/* 写真の左上のバッジ:家にあるものだけで作れるか・買い足しが要るか・何を使い切れるか */
+.photo-badges {
   position: absolute;
   top: 8px;
   left: 8px;
   z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  max-width: calc(100% - 16px);
+}
+.photo-badge {
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -1095,8 +1085,11 @@ button.dish:active {
 .badge-buy {
   background: var(--warm);
 }
+.badge-soon {
+  background: var(--hot);
+}
 /* レシピ画面の大きい写真では、左上の戻るボタンと重ならない位置に */
-.photo-hero .photo-badge {
+.photo-hero .photo-badges {
   top: calc(var(--top) + 64px);
   left: 14px;
 }

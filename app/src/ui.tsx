@@ -223,7 +223,11 @@ export function Sheet({ title, onClose, children, footer }: { title: string; onC
 
 export function Photo({ recipe, className = '' }: { recipe: Recipe; className?: string }) {
   const status = useStore((s) => s.image[recipe.id]);
+  const items = useStore((s) => s.items);
   const buy = recipe.ingredients.filter((i) => i.source === 'buy');
+  // その料理で使い切れる、期限の近い食材(あと3日まで)
+  const soonIds = new Set(recipe.ingredients.map((i) => i.itemId).filter(Boolean));
+  const soon = items.filter((i) => soonIds.has(i.id) && daysLeft(i) <= 3);
   const [shown, setShown] = useState(false);
   const tried = useRef(false);
   useEffect(() => {
@@ -235,17 +239,26 @@ export function Photo({ recipe, className = '' }: { recipe: Recipe; className?: 
   }, [recipe.id, recipe.imageUrl, status]);
   return (
     <div className={`photo ${className} ${recipe.imageUrl ? '' : status === 'capped' || status === 'error' ? 'photo-none' : 'photo-wait'}`}>
-      {buy.length === 0 ? (
-        <span className="photo-badge badge-home">
-          <Icon name="check" size={12} />
-          家にあるものだけ
-        </span>
-      ) : (
-        <span className="photo-badge badge-buy">
-          <Icon name="basket" size={12} />
-          買い足しあり
-        </span>
-      )}
+      <span className="photo-badges">
+        {buy.length === 0 ? (
+          <span className="photo-badge badge-home">
+            <Icon name="check" size={12} />
+            家にあるものだけ
+          </span>
+        ) : (
+          <span className="photo-badge badge-buy">
+            <Icon name="basket" size={12} />
+            買い足しあり
+          </span>
+        )}
+        {soon.length > 0 && (
+          <span className="photo-badge badge-soon">
+            <Icon name="clock" size={12} />
+            {soon.slice(0, 2).map((s) => s.name).join('・')}
+            {soon.length > 2 ? 'ほか' : ''}を使い切れます
+          </span>
+        )}
+      </span>
       {recipe.imageUrl ? (
         <img src={recipe.imageUrl} alt={recipe.title} className={shown ? 'on' : ''} onLoad={() => setShown(true)} decoding="async" />
       ) : status === 'error' ? (

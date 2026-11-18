@@ -1,6 +1,6 @@
 // 提案の画面と、レシピの画面。
 import { useEffect, useState } from 'react';
-import { batchFor, cooked, daysLeft, ideaKey, loadIdea, loadScene, toast, toggleFav, togglePlan, useStore } from './store.ts';
+import { batchFor, cooked, ideaKey, loadIdea, loadScene, toast, toggleFav, togglePlan, useStore } from './store.ts';
 import type { Item, Recipe, Scene } from './store.ts';
 import { back, go, Icon, Photo, Sheet } from './ui.tsx';
 
@@ -72,15 +72,8 @@ function DishSkeleton() {
   );
 }
 
-/** その料理で使う、期限の近い食材(あと3日まで) */
-function soonUsed(recipe: Recipe, items: Item[]): Item[] {
-  const ids = new Set(recipe.ingredients.map((i) => i.itemId).filter(Boolean));
-  return items.filter((i) => ids.has(i.id) && daysLeft(i) <= 3);
-}
-
-export function DishCard({ recipe, items }: { recipe: Recipe; items: Item[] }) {
+export function DishCard({ recipe }: { recipe: Recipe; items: Item[] }) {
   const buy = recipe.ingredients.filter((i) => i.source === 'buy');
-  const soon = soonUsed(recipe, items);
   return (
     <button className="dish" onClick={() => go(`/r/${recipe.id}`)}>
       <Photo recipe={recipe} />
@@ -93,7 +86,6 @@ export function DishCard({ recipe, items }: { recipe: Recipe; items: Item[] }) {
         </span>
         {buy.length > 0 && <span className="tag tag-buy">{buy.map((b) => b.name).join('、')}を買い足す</span>}
       </span>
-      {soon.length > 0 && <span className="dish-soon">{soon.map((s) => s.name).join('・')}を使い切れます</span>}
     </button>
   );
 }
