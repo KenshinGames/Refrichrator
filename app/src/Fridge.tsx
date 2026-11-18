@@ -47,7 +47,14 @@ export function Fridge() {
   const [shot, setShot] = useState<{ file: File; kind: 'receipt' | 'photo' } | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
   const [resetting, setResetting] = useState(false);
-  const [openSwipe, setOpenSwipe] = useState<string | null>(null); // 左スワイプで「出す」が出ている行
+  const [openSwipe, setOpenSwipe] = useState<string | null>(null); // 左スワイプで「削除」が出ている行
+  // 一覧をスクロールし始めたら、出ている「削除」は引っ込める(眺める操作と消す操作を混ぜない)
+  useEffect(() => {
+    if (!openSwipe) return;
+    const close = () => setOpenSwipe(null);
+    window.addEventListener('scroll', close, { capture: true, passive: true });
+    return () => window.removeEventListener('scroll', close, { capture: true });
+  }, [openSwipe]);
   const receiptInput = useRef<HTMLInputElement>(null);
   const photoInput = useRef<HTMLInputElement>(null);
 
@@ -160,9 +167,12 @@ export function Fridge() {
 const SWIPE_W = 84; // 左スワイプで出てくる「出す」ボタンの幅
 
 /**
- * 一覧の1行。左にスライドすると「削除」が出て、押したときだけ消す(メールアプリと同じ動き)。
- * スライドしただけでは絶対に消えない(スクロールのつもりで触って消える事故を防ぐ)。
- * 縦のスクロールとは競合させない(横の動きが縦の1.6倍を超えたときだけスワイプとして扱う)。
+ * 一覧の1行。左にスライドすると「削除」が出て、しっかり押したときだけ消す(メールアプリと同じ動き)。
+ * 誤削除の防止を3重にしている:
+ * 1. スライドしただけでは消えない(消すのは「削除」ボタンを押したときだけ)
+ * 2. 横の動きが縦の1.6倍を超えたときだけスワイプとして扱い、途中で斜めが強くなったら取り消す
+ * 3. 「削除」ボタンは、押し始めてから指が10pxを超えて動いたクリックを受け付けない(流れで触れただけでは消えない)
+ * 加えて、一覧をスクロールし始めたら出ている「削除」は引っ込める。
  */
 function SwipeRow({
   item,
@@ -185,6 +195,7 @@ function SwipeRow({
   const startRef = useRef<{ x: number; y: number; mode: '' | 'h' | 'v'; base: number } | null>(null);
   const movedRef = useRef(false);
   const frontRef = useRef<HTMLButtonElement>(null);
+  const delDownRef = useRef<{ x: number; y: number } | null>(null); // 「削除」を押し始めた位置(流れで触れただけか見分ける)
 
   // 一覧で1つにまとめて見せている、同じ名前・同じ期限の分もまとめて出す
   const mates = all.filter((i) => normName(i.name) === normName(item.name) && i.expiresOn === item.expiresOn);
@@ -223,6 +234,18 @@ function SwipeRow({
       }
     }
     if (s.mode === 'h') {
+      // 途中で斜めの動きが強くなったら、スクロールのつもりだと判断してスワイプをやめる
+      if (Math.abs(my) > Math.abs(mx) * 0.8 + 12) {
+        s.mode = 'v';
+        setDrag(false);
+        setDx(0);
+        try {
+          frontRef.current?.releasePointerCapture(e.pointerId);
+        } catch {
+          // 離せなくても、状態は戻してある
+        }
+        return;
+      }
       setDx(mx);
       if (Math.abs(mx) > 6) movedRef.current = true;
     }
@@ -246,7 +269,21 @@ function SwipeRow({
 
   return (
     <div className="swipe">
-      <button className="swipe-del" aria-label={`${item.name}を削除`} tabIndex={open ? 0 : -1} onClick={remove}>
+      <button
+        className="swipe-del"
+        aria-label={`${item.name}を削除`}
+        tabIndex={open ? 0 : -1}
+        onPointerDown={(e) => {
+          delDownRef.current = { x: e.clientX, y: e.clientY };
+        }}
+        onClick={(e) => {
+          const d = delDownRef.current;
+          delDownRef.current = null;
+          // 押し始めてから指が10pxを超えて動いていたら、スライドやスクロールの流れで触れただけなので消さない
+          if (d && Math.hypot(e.clientX - d.x, e.clientY - d.y) > 10) return;
+          remove();
+        }}
+      >
         削除
       </button>
       <button
